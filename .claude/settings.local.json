@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($paths = @\\(\"$env:ProgramFiles\\\\nodejs\\\\node.exe\",\"${env:ProgramFiles\\(x86\\)}\\\\nodejs\\\\node.exe\",\"$env:LOCALAPPDATA\\\\Programs\\\\nodejs\\\\node.exe\",\"$env:APPDATA\\\\npm\\\\node.exe\"\\); foreach\\($p in $paths\\){ if\\(Test-Path $p\\){ Write-Output \"ENCONTRADO: $p\" } }; Write-Output \"--- where ---\"; try { where.exe node } catch {}; try { where.exe npm } catch {}; Write-Output \"--- winget node? ---\"; try { \\(Get-Command winget -ErrorAction Stop\\).Source } catch { \"winget indisponível\" })",
+      "PowerShell(winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements --silent --disable-interactivity)"
+    ]
+  }
+}

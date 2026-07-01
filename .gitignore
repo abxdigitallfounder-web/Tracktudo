@@ -1,0 +1,34 @@
+# Dependências
+node_modules/
+**/node_modules/
+
+# Variáveis de ambiente (NUNCA comitar o token)
+.env
+.env.local
+**/.env
+!**/.env.example
+
+# Banco de dados SQLite
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/
+
+# Build
+dist/
+build/
+**/dist/
+**/build/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# Editor / SO
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
