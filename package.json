@@ -1,0 +1,15 @@
+{
+  "name": "tracktudo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Monitoramento de contas de anúncio Meta (frontend + backend)",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm --prefix client install && npm --prefix client run build && npm --prefix server install && npm --prefix server run build",
+    "start": "npm --prefix server run start",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev"
+  }
+}

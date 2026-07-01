@@ -1,0 +1,28 @@
+# Blueprint do Render para o TRACKTUDO.
+# Sobe UM web service que compila o frontend + backend e serve tudo junto.
+# Os valores marcados com `sync: false` você preenche no painel do Render
+# (nunca ficam no repositório).
+services:
+  - type: web
+    name: tracktudo
+    runtime: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: META_API_VERSION
+        value: v25.0
+      # Segredo do cookie de sessão — o Render gera um valor aleatório seguro.
+      - key: SESSION_SECRET
+        generateValue: true
+      # >>> Preencher no painel do Render (Environment) <<<
+      - key: APP_PASSWORD
+        sync: false
+      - key: META_SYSTEM_USER_TOKEN
+        sync: false
+      - key: META_TOKENS
+        sync: false

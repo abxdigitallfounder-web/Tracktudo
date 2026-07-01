@@ -81,6 +81,18 @@ export const config = {
   },
   server: {
     port: num('PORT', 3000),
+    nodeEnv: process.env.NODE_ENV?.trim() || 'development',
+    get isProduction(): boolean {
+      return this.nodeEnv === 'production';
+    },
+    /** Caminho do arquivo SQLite (permite disco persistente em produção). */
+    databasePath: process.env.DATABASE_PATH?.trim() || '',
+  },
+  auth: {
+    /** Senha única para acessar o dashboard. Vazio = sem login (apenas dev/local). */
+    password: process.env.APP_PASSWORD?.trim() || '',
+    /** Segredo para assinar o cookie de sessão. */
+    secret: process.env.SESSION_SECRET?.trim() || '',
   },
   cron: {
     limits: process.env.CRON_LIMITS?.trim() || '0 */12 * * *',

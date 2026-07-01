@@ -1,12 +1,18 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { config } from '../config/index.js';
 import type { AdAccount, DailySpend } from '../meta/types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// Banco em server/data/tracktudo.db (a pasta data/ está no .gitignore).
-const DB_PATH = resolve(__dirname, '../../data/tracktudo.db');
+// DATABASE_PATH (ex.: disco persistente do host) ou, por padrão,
+// server/data/tracktudo.db (a pasta data/ está no .gitignore).
+const DB_PATH = config.server.databasePath
+  ? isAbsolute(config.server.databasePath)
+    ? config.server.databasePath
+    : resolve(process.cwd(), config.server.databasePath)
+  : resolve(__dirname, '../../data/tracktudo.db');
 
 mkdirSync(dirname(DB_PATH), { recursive: true });
 

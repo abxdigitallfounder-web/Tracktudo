@@ -98,3 +98,36 @@ export async function collectAll(): Promise<void> {
     collecting = false;
   }
 }
+
+/** Job agendado de limites (respeita o guard de coleta em andamento). */
+export async function collectLimitsJob(): Promise<void> {
+  if (collecting) {
+    console.warn('[Cron] Coleta em andamento; pulando job de limites.');
+    return;
+  }
+  collecting = true;
+  try {
+    await collectLimits();
+  } catch (err) {
+    console.error('[Cron] Erro no job de limites:', (err as Error).message);
+  } finally {
+    collecting = false;
+  }
+}
+
+/** Job agendado de gastos (últimos 2 dias, para atualizar o dia corrente). */
+export async function collectDailyJob(): Promise<void> {
+  if (collecting) {
+    console.warn('[Cron] Coleta em andamento; pulando job de gastos.');
+    return;
+  }
+  collecting = true;
+  try {
+    const accounts = await listAdAccounts();
+    await collectDailySpend(accounts, daysAgo(2), today());
+  } catch (err) {
+    console.error('[Cron] Erro no job de gastos:', (err as Error).message);
+  } finally {
+    collecting = false;
+  }
+}

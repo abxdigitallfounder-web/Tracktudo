@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { apiGetStatus, apiRefresh, type Status } from './api';
+import { apiAuthStatus, apiGetStatus, apiLogout, apiRefresh, type Status } from './api';
 import { timeAgo } from './format';
 import { LimitsPage } from './pages/LimitsPage';
 import { DailySpendPage } from './pages/DailySpendPage';
+import { Login } from './pages/Login';
 
 type Tab = 'limits' | 'daily';
 type Theme = 'light' | 'dark';
@@ -24,6 +25,21 @@ export default function App() {
   const [status, setStatus] = useState<Status | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  // null = ainda verificando; true/false = precisa (ou não) de login.
+  const [authed, setAuthed] = useState<boolean | null>(null);
+
+  const checkAuth = useCallback(async () => {
+    try {
+      const s = await apiAuthStatus();
+      setAuthed(!s.authEnabled || s.authenticated);
+    } catch {
+      setAuthed(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -34,10 +50,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (authed !== true) return;
     loadStatus();
     const t = setInterval(loadStatus, 15000);
     return () => clearInterval(t);
-  }, [loadStatus]);
+  }, [loadStatus, authed]);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -66,6 +83,18 @@ export default function App() {
 
   const lastUpdate = status?.lastLimitsCollect;
   const collecting = status?.collecting || refreshing;
+
+  async function handleLogout() {
+    await apiLogout();
+    setAuthed(false);
+  }
+
+  if (authed === null) {
+    return <div className="empty" style={{ marginTop: 80 }}>Carregando…</div>;
+  }
+  if (authed === false) {
+    return <Login onSuccess={() => setAuthed(true)} />;
+  }
 
   return (
     <div className="app">
@@ -96,6 +125,9 @@ export default function App() {
         </button>
         <button className="btn primary" onClick={handleRefresh} disabled={collecting}>
           {collecting ? 'Atualizando…' : '⟳ Atualizar agora'}
+        </button>
+        <button className="icon-btn" onClick={handleLogout} title="Sair">
+          ⎋
         </button>
       </div>
 

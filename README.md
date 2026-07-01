@@ -100,4 +100,40 @@ _(Detalhes de cada módulo são preenchidos nas próximas fases de desenvolvimen
 
 ## Variáveis de ambiente
 
-Veja `server/.env.example` para a lista completa (token, business id, versão da API, cron e rate limit).
+Veja `server/.env.example` para a lista completa (token, business id, versão da API, cron, rate
+limit, senha de acesso e opções de produção).
+
+---
+
+## Deploy em produção (Render)
+
+O TRACKTUDO sobe como **um único web service**: o backend compila e serve o frontend na mesma
+origem, protegido por senha.
+
+### Passos
+
+1. Suba este repositório no GitHub.
+2. No [Render](https://render.com): **New +** → **Blueprint** → conecte o repositório. Ele lê o
+   `render.yaml` e cria o serviço `tracktudo` automaticamente.
+   - Alternativa manual: **New Web Service** → Build: `npm run build` → Start: `npm start`.
+3. Em **Environment**, preencha as variáveis marcadas como secretas:
+   - `APP_PASSWORD` — a senha do dashboard.
+   - `META_SYSTEM_USER_TOKEN` — seu token principal da Meta.
+   - `META_TOKENS` — tokens adicionais (opcional, formato `rotulo|token,...`).
+   - `SESSION_SECRET` é gerado automaticamente pelo Render.
+4. **Deploy**. Ao abrir a URL, o app pede a senha e começa a coletar os dados.
+
+### Observações do plano gratuito do Render
+
+- O serviço **"dorme"** após ~15 min sem acesso; o disco é **efêmero**. Por isso o TRACKTUDO
+  **recoleta os dados da Meta ao acordar** (limites + últimos 30 dias). O primeiro acesso após
+  dormir leva ~1 min para popular.
+- Como o serviço dorme, o **agendador (cron)** só roda enquanto está acordado. Para coleta
+  automática 24/7, use um plano pago (com disco persistente, aponte `DATABASE_PATH` para o volume)
+  ou um serviço always-on.
+
+### Segurança
+
+- O dashboard exige **senha** (`APP_PASSWORD`). Sem ela definida, o login fica desativado — nunca
+  publique sem senha, pois os dados são gastos de anúncios de clientes.
+- O `.env` e o banco `.db` **nunca** vão para o repositório (`.gitignore`).
