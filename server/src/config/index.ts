@@ -21,10 +21,58 @@ function num(name: string, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+export interface MetaToken {
+  /** Rótulo amigável para logs (ex.: "system-user", "arthur"). */
+  label: string;
+  /** O valor do access_token. */
+  value: string;
+}
+
+/**
+ * Lê os tokens da Meta de duas fontes (deduplicadas):
+ *  - META_SYSTEM_USER_TOKEN: um único token (compatibilidade).
+ *  - META_TOKENS: lista separada por vírgula; cada item pode ser "rotulo|token"
+ *    ou apenas "token". Ex.: "system-user|EAA...,arthur|EAB..."
+ * As contas de todos os tokens são unidas (sem duplicar) em me/adaccounts.
+ */
+function parseTokens(): MetaToken[] {
+  const out: MetaToken[] = [];
+  const seen = new Set<string>();
+
+  const add = (label: string, value: string): void => {
+    const v = value.trim();
+    if (!v || seen.has(v)) return;
+    seen.add(v);
+    out.push({ label: label.trim() || `token${out.length + 1}`, value: v });
+  };
+
+  const primary = process.env.META_SYSTEM_USER_TOKEN?.trim();
+  if (primary) add('system-user', primary);
+
+  const multi = process.env.META_TOKENS?.trim();
+  if (multi) {
+    for (const raw of multi.split(',')) {
+      const item = raw.trim();
+      if (!item) continue;
+      const sep = item.indexOf('|');
+      if (sep > 0) add(item.slice(0, sep), item.slice(sep + 1));
+      else add('', item);
+    }
+  }
+
+  return out;
+}
+
+const metaTokens = parseTokens();
+
 export const config = {
   meta: {
-    // Token do System User (Usuário do Sistema). Enviado como access_token na Graph API.
-    accessToken: required('META_SYSTEM_USER_TOKEN'),
+    /** Lista de tokens da Meta (um ou vários). As contas de todos são unidas. */
+    tokens: metaTokens,
+    /** Primeiro token — usado em chamadas globais e health check (compat). */
+    get accessToken(): string {
+      return metaTokens[0]?.value ?? '';
+    },
     businessId: required('META_BUSINESS_ID'),
     apiVersion: process.env.META_API_VERSION?.trim() || 'v25.0',
     get baseUrl(): string {
@@ -52,16 +100,14 @@ export const config = {
 export function assertMetaConfig(): void {
   // Apenas o token é obrigatório. As contas vêm de me/adaccounts (não dependem
   // de um Business ID). META_BUSINESS_ID fica opcional (uso futuro / filtros).
-  const missing: string[] = [];
-  if (!config.meta.accessToken) missing.push('META_SYSTEM_USER_TOKEN');
-  if (missing.length > 0) {
+  if (config.meta.tokens.length === 0) {
     throw new Error(
-      `Configuração da Meta ausente: ${missing.join(', ')}. ` +
-        'Preencha o arquivo server/.env (veja server/.env.example).',
+      'Nenhum token da Meta configurado. Preencha META_SYSTEM_USER_TOKEN ou ' +
+        'META_TOKENS no arquivo server/.env (veja server/.env.example).',
     );
   }
 }
 
 export function hasMetaConfig(): boolean {
-  return Boolean(config.meta.accessToken);
+  return config.meta.tokens.length > 0;
 }

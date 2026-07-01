@@ -64,15 +64,17 @@ export interface RequestResult<T> {
  * - backoff exponencial nos erros de throttle (respeitando estimated_time_to_regain_access).
  *
  * `contextLabel` aparece nos logs (ex.: nome/id da conta) para saber quem falhou.
+ * `token` é o access_token a usar (o app pode ter vários — ver listAdAccounts).
  */
 async function graphGet<T>(
   path: string,
   params: Record<string, string>,
   contextLabel: string,
+  token: string,
 ): Promise<RequestResult<T>> {
   const url = new URL(`${config.meta.baseUrl}/${path.replace(/^\//, '')}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  url.searchParams.set('access_token', config.meta.accessToken);
+  url.searchParams.set('access_token', token);
 
   let attempt = 0;
   // Loop de retry para throttle.
@@ -152,11 +154,23 @@ function normalizeAccount(raw: RawAdAccount): AdAccount {
 }
 
 /**
- * Lista TODAS as contas de anúncio que o token enxerga (me/adaccounts),
- * seguindo a paginação por cursor. Faz UMA query por página (não 70 chamadas
- * separadas). Cobre contas espalhadas por vários Business Managers.
+ * Registro de qual token consegue acessar cada conta (chave = "act_...").
+ * Preenchido durante listAdAccounts e usado depois em getDailySpend para
+ * chamar os insights de cada conta com um token que tem acesso a ela.
  */
-export async function listAdAccounts(): Promise<AdAccount[]> {
+const accountToken = new Map<string, string>();
+
+function normalizeActId(accountId: string): string {
+  return accountId.startsWith('act_') ? accountId : `act_${accountId}`;
+}
+
+/** Token que acessa a conta; cai no primeiro token se não houver registro. */
+export function getTokenForAccount(accountId: string): string {
+  return accountToken.get(normalizeActId(accountId)) ?? config.meta.accessToken;
+}
+
+/** Lista as contas visíveis por UM token, seguindo a paginação por cursor. */
+async function listAdAccountsForToken(token: string, label: string): Promise<AdAccount[]> {
   const accounts: AdAccount[] = [];
   let after: string | undefined;
   let page = 0;
@@ -170,14 +184,15 @@ export async function listAdAccounts(): Promise<AdAccount[]> {
     if (after) params.after = after;
 
     const { body, usage } = await graphGet<Paged<RawAdAccount>>(
-      `me/adaccounts`,
+      'me/adaccounts',
       params,
-      `me/adaccounts (página ${page})`,
+      `me/adaccounts [${label}] (página ${page})`,
+      token,
     );
 
     for (const raw of body.data) accounts.push(normalizeAccount(raw));
     console.log(
-      `[Meta] Página ${page}: ${body.data.length} contas` +
+      `[Meta] [${label}] página ${page}: ${body.data.length} contas` +
         (usage ? ` (cota ${usage.callCount}%)` : ''),
     );
 
@@ -185,8 +200,48 @@ export async function listAdAccounts(): Promise<AdAccount[]> {
     if (after) await sleep(config.rateLimit.requestDelayMs);
   } while (after);
 
-  console.log(`[Meta] Total de contas coletadas: ${accounts.length}`);
   return accounts;
+}
+
+/**
+ * Lista TODAS as contas de anúncio visíveis por TODOS os tokens configurados,
+ * unindo os resultados sem duplicar (dedup por id). Registra qual token acessa
+ * cada conta. Se um token falhar (ex.: expirado), loga e segue com os demais.
+ */
+export async function listAdAccounts(): Promise<AdAccount[]> {
+  const byId = new Map<string, AdAccount>();
+  accountToken.clear();
+
+  for (const { label, value } of config.meta.tokens) {
+    try {
+      const accounts = await listAdAccountsForToken(value, label);
+      let novas = 0;
+      for (const acc of accounts) {
+        const key = normalizeActId(acc.id);
+        if (!byId.has(key)) {
+          byId.set(key, acc);
+          novas += 1;
+        }
+        // Primeiro token que enxerga a conta fica responsável por ela.
+        if (!accountToken.has(key)) accountToken.set(key, value);
+      }
+      console.log(
+        `[Meta] Token "${label}": ${accounts.length} contas (${novas} novas após dedup).`,
+      );
+    } catch (err) {
+      console.error(
+        `[Meta] Token "${label}" falhou ao listar contas: ${(err as Error).message}. ` +
+          'Seguindo com os demais tokens.',
+      );
+    }
+  }
+
+  const result = [...byId.values()];
+  console.log(
+    `[Meta] Total de contas únicas: ${result.length} ` +
+      `(de ${config.meta.tokens.length} token(s)).`,
+  );
+  return result;
 }
 
 /**
@@ -197,9 +252,12 @@ export async function getDailySpend(
   accountId: string,
   since: string,
   until: string,
+  token?: string,
 ): Promise<DailySpend[]> {
   // accountId pode vir como "act_123" ou "123"; o endpoint espera act_{id}.
-  const actId = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
+  const actId = normalizeActId(accountId);
+  // Usa o token informado, ou o que registramos como dono desta conta.
+  const useToken = token ?? getTokenForAccount(actId);
   const result: DailySpend[] = [];
   let after: string | undefined;
 
@@ -217,6 +275,7 @@ export async function getDailySpend(
       `${actId}/insights`,
       params,
       `insights ${actId}`,
+      useToken,
     );
 
     for (const row of body.data) {
