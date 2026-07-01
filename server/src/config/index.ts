@@ -23,7 +23,8 @@ function num(name: string, fallback: number): number {
 
 export const config = {
   meta: {
-    accessToken: required('META_ACCESS_TOKEN'),
+    // Token do System User (Usuário do Sistema). Enviado como access_token na Graph API.
+    accessToken: required('META_SYSTEM_USER_TOKEN'),
     businessId: required('META_BUSINESS_ID'),
     apiVersion: process.env.META_API_VERSION?.trim() || 'v25.0',
     get baseUrl(): string {
@@ -50,7 +51,7 @@ export const config = {
  */
 export function assertMetaConfig(): void {
   const missing: string[] = [];
-  if (!config.meta.accessToken) missing.push('META_ACCESS_TOKEN');
+  if (!config.meta.accessToken) missing.push('META_SYSTEM_USER_TOKEN');
   if (!config.meta.businessId) missing.push('META_BUSINESS_ID');
   if (missing.length > 0) {
     throw new Error(

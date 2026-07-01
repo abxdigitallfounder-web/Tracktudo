@@ -55,7 +55,7 @@ TRACKTUDO/
    Edite `server/.env`:
 
    ```env
-   META_ACCESS_TOKEN=seu_token_aqui
+   META_SYSTEM_USER_TOKEN=seu_token_de_system_user_aqui
    META_BUSINESS_ID=seu_business_id_aqui
    ```
 
