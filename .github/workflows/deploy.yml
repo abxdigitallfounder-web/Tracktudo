@@ -1,0 +1,70 @@
+name: CI / Deploy
+
+# Roda a cada push na branch main (e permite disparar manualmente).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # ------------------------------------------------------------------
+  # 1) BUILD + TYPECHECK
+  # Garante que o código compila antes de qualquer deploy.
+  # Não precisa do token da Meta: isso é só compilação.
+  # ------------------------------------------------------------------
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # ---- Backend (server) ----
+      - name: Instalar dependências do server
+        working-directory: server
+        run: npm ci
+
+      - name: Typecheck + build do server
+        working-directory: server
+        run: |
+          npm run typecheck
+          npm run build
+
+      # ---- Frontend (client) ----
+      - name: Instalar dependências do client
+        working-directory: client
+        run: npm ci
+
+      - name: Build do client
+        working-directory: client
+        run: npm run build
+
+  # ------------------------------------------------------------------
+  # 2) DEPLOY (esqueleto)
+  # Aqui o token sai do GitHub Secret e vai para o host de verdade.
+  # O passo real depende de ONDE o app vai rodar (VPS, Render, etc.).
+  # Deixe comentado até termos o host definido.
+  # ------------------------------------------------------------------
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # Descomente quando o host estiver pronto:
+    if: false
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      # Exemplo: deploy via SSH para uma VPS.
+      # O token NUNCA aparece em texto — vem do Secret criptografado.
+      - name: Deploy para a VPS (exemplo)
+        env:
+          META_SYSTEM_USER_TOKEN: ${{ secrets.META_SYSTEM_USER_TOKEN }}
+          META_TOKENS: ${{ secrets.META_TOKENS }}
+        run: |
+          echo "Aqui entram os comandos de deploy para o seu host."
+          echo "O app lê process.env.META_SYSTEM_USER_TOKEN — igual ao localhost."
+          echo "Substitua este passo pelo deploy real (SSH, rsync, docker, etc.)."
