@@ -50,9 +50,10 @@ export const config = {
  * Chamada antes de qualquer coleta real (não no boot do scaffold).
  */
 export function assertMetaConfig(): void {
+  // Apenas o token é obrigatório. As contas vêm de me/adaccounts (não dependem
+  // de um Business ID). META_BUSINESS_ID fica opcional (uso futuro / filtros).
   const missing: string[] = [];
   if (!config.meta.accessToken) missing.push('META_SYSTEM_USER_TOKEN');
-  if (!config.meta.businessId) missing.push('META_BUSINESS_ID');
   if (missing.length > 0) {
     throw new Error(
       `Configuração da Meta ausente: ${missing.join(', ')}. ` +
@@ -62,5 +63,5 @@ export function assertMetaConfig(): void {
 }
 
 export function hasMetaConfig(): boolean {
-  return Boolean(config.meta.accessToken && config.meta.businessId);
+  return Boolean(config.meta.accessToken);
 }
