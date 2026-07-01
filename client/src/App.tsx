@@ -4,6 +4,7 @@ import { timeAgo } from './format';
 import { LimitsPage } from './pages/LimitsPage';
 import { DailySpendPage } from './pages/DailySpendPage';
 import { Login } from './pages/Login';
+import { TokenBanner } from './components/TokenBanner';
 
 type Tab = 'limits' | 'daily';
 type Theme = 'light' | 'dark';
@@ -130,6 +131,8 @@ export default function App() {
           ⎋
         </button>
       </div>
+
+      <TokenBanner />
 
       {tab === 'limits' ? (
         <LimitsPage reloadKey={reloadKey} />

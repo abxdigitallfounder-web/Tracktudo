@@ -7,6 +7,7 @@ import {
 import { getState } from '../db/index.js';
 import { accountStatusLabel } from '../meta/accountStatus.js';
 import { collectAll, isCollecting, today } from '../services/collector.js';
+import { getTokensInfo } from '../meta/tokenInfo.js';
 import { config } from '../config/index.js';
 
 export const api = Router();
@@ -57,6 +58,15 @@ api.get('/status', (_req, res) => {
     lastDailyCollect: getState('last_daily_collect'),
     tokenCount: config.meta.tokens.length,
   });
+});
+
+/** Validade dos tokens (para o monitor de expiração no dashboard). */
+api.get('/token-health', async (_req, res) => {
+  try {
+    res.json(await getTokensInfo());
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
 });
 
 /** Dispara uma coleta manual (assíncrona). */

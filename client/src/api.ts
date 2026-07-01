@@ -43,9 +43,19 @@ async function get<T>(url: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export interface TokenInfo {
+  label: string;
+  type: string;
+  valid: boolean;
+  expiresAt: number | null;
+  daysLeft: number | null;
+  error?: string;
+}
+
 export const apiGetAccounts = () => get<Account[]>('/api/accounts');
 export const apiGetSummary = () => get<Summary>('/api/summary');
 export const apiGetStatus = () => get<Status>('/api/status');
+export const apiGetTokenHealth = () => get<TokenInfo[]>('/api/token-health');
 
 export const apiGetDailySpend = (since: string, until: string) =>
   get<DailySpendRow[]>(`/api/daily-spend?since=${since}&until=${until}`);
