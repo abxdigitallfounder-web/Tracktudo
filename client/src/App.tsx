@@ -3,18 +3,20 @@ import { apiAuthStatus, apiGetStatus, apiLogout, apiRefresh, type Status } from 
 import { timeAgo } from './format';
 import { LimitsPage } from './pages/LimitsPage';
 import { DailySpendPage } from './pages/DailySpendPage';
+import { FoldersPage } from './pages/FoldersPage';
 import { Login } from './pages/Login';
 import { TokenBanner } from './components/TokenBanner';
 import {
   IconGauge,
   IconChart,
+  IconFolder,
   IconRefresh,
   IconSun,
   IconMoon,
   IconLogout,
 } from './components/icons';
 
-type Tab = 'limits' | 'daily';
+type Tab = 'limits' | 'daily' | 'folders';
 type Theme = 'light' | 'dark';
 
 function useTheme(): [Theme, () => void] {
@@ -105,7 +107,8 @@ export default function App() {
     return <Login onSuccess={() => setAuthed(true)} />;
   }
 
-  const pageTitle = tab === 'limits' ? 'Limites' : 'Gastos Diários';
+  const pageTitle =
+    tab === 'limits' ? 'Limites' : tab === 'daily' ? 'Gastos Diários' : 'Pastas';
 
   return (
     <div className="layout">
@@ -130,6 +133,13 @@ export default function App() {
           >
             <IconChart />
             Gastos Diários
+          </button>
+          <button
+            className={`nav-item ${tab === 'folders' ? 'active' : ''}`}
+            onClick={() => setTab('folders')}
+          >
+            <IconFolder />
+            Pastas
           </button>
         </nav>
 
@@ -164,11 +174,9 @@ export default function App() {
 
         <TokenBanner />
 
-        {tab === 'limits' ? (
-          <LimitsPage reloadKey={reloadKey} />
-        ) : (
-          <DailySpendPage reloadKey={reloadKey} />
-        )}
+        {tab === 'limits' && <LimitsPage reloadKey={reloadKey} />}
+        {tab === 'daily' && <DailySpendPage reloadKey={reloadKey} />}
+        {tab === 'folders' && <FoldersPage reloadKey={reloadKey} />}
       </main>
     </div>
   );

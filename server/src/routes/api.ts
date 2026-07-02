@@ -4,7 +4,15 @@ import {
   getDailySpendRange,
   getSummary,
 } from '../db/queries.js';
-import { getState, setAccountTags } from '../db/index.js';
+import {
+  getState,
+  setAccountTags,
+  listFolders,
+  createFolder,
+  renameFolder,
+  deleteFolder,
+  setAccountFolder,
+} from '../db/index.js';
 import { accountStatusLabel } from '../meta/accountStatus.js';
 import { collectAll, isCollecting, today } from '../services/collector.js';
 import { getTokensInfo } from '../meta/tokenInfo.js';
@@ -24,6 +32,7 @@ api.get('/accounts', (_req, res) => {
     businessId: r.business_id,
     businessName: r.business_name,
     tags: parseTags(r.tags),
+    folderId: r.folder_id,
     spendCap: r.spend_cap,
     amountSpent: r.amount_spent ?? 0,
     balance: r.balance,
@@ -75,6 +84,47 @@ api.put('/accounts/:id/tags', (req, res) => {
   ].slice(0, 20);
   setAccountTags(req.params.id, tags);
   res.json({ ok: true, tags });
+});
+
+// ---------- Pastas ----------
+api.get('/folders', (_req, res) => {
+  res.json(listFolders());
+});
+
+api.post('/folders', (req, res) => {
+  const name = String((req.body as { name?: unknown })?.name ?? '').trim();
+  if (!name) {
+    res.status(400).json({ error: 'nome obrigatório' });
+    return;
+  }
+  res.status(201).json(createFolder(name.slice(0, 60)));
+});
+
+api.put('/folders/:id', (req, res) => {
+  const name = String((req.body as { name?: unknown })?.name ?? '').trim();
+  if (!name) {
+    res.status(400).json({ error: 'nome obrigatório' });
+    return;
+  }
+  renameFolder(Number(req.params.id), name.slice(0, 60));
+  res.json({ ok: true });
+});
+
+api.delete('/folders/:id', (req, res) => {
+  deleteFolder(Number(req.params.id));
+  res.json({ ok: true });
+});
+
+/** Move uma conta para uma pasta (ou remove com folderId null). */
+api.put('/accounts/:id/folder', (req, res) => {
+  const raw = (req.body as { folderId?: unknown })?.folderId;
+  const folderId = raw == null ? null : Number(raw);
+  if (folderId != null && !Number.isFinite(folderId)) {
+    res.status(400).json({ error: 'folderId inválido' });
+    return;
+  }
+  setAccountFolder(req.params.id, folderId);
+  res.json({ ok: true, folderId });
 });
 
 /** Validade dos tokens (para o monitor de expiração no dashboard). */

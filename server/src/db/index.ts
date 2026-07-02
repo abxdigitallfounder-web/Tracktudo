@@ -36,7 +36,14 @@ function createTables(): void {
       business_id   TEXT,                    -- id do Business Manager dono
       business_name TEXT,                    -- nome do Business Manager dono
       tags          TEXT,                    -- tags do usuário (JSON array)
+      folder_id     INTEGER,                 -- pasta do usuário (opcional)
       updated_at    TEXT NOT NULL            -- ISO 8601
+    );
+
+    CREATE TABLE IF NOT EXISTS folders (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT NOT NULL,
+      created_at TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS limit_snapshots (
@@ -77,6 +84,7 @@ function migrateColumns(): void {
   if (!cols.has('business_id')) db.exec(`ALTER TABLE accounts ADD COLUMN business_id TEXT`);
   if (!cols.has('business_name')) db.exec(`ALTER TABLE accounts ADD COLUMN business_name TEXT`);
   if (!cols.has('tags')) db.exec(`ALTER TABLE accounts ADD COLUMN tags TEXT`);
+  if (!cols.has('folder_id')) db.exec(`ALTER TABLE accounts ADD COLUMN folder_id INTEGER`);
 }
 
 // Garante que as tabelas existem ANTES de compilar os statements abaixo.
@@ -124,6 +132,47 @@ const setTagsStmt = db.prepare(`UPDATE accounts SET tags = @tags WHERE id = @id`
 /** Salva as tags (array) de uma conta. */
 export function setAccountTags(id: string, tags: string[]): void {
   setTagsStmt.run({ id: normalizeId(id), tags: JSON.stringify(tags) });
+}
+
+// ---------- Pastas ----------
+export interface FolderRow {
+  id: number;
+  name: string;
+  created_at: string;
+}
+
+const listFoldersStmt = db.prepare(`SELECT id, name, created_at FROM folders ORDER BY name COLLATE NOCASE`);
+const createFolderStmt = db.prepare(`INSERT INTO folders (name, created_at) VALUES (@name, @createdAt)`);
+const renameFolderStmt = db.prepare(`UPDATE folders SET name = @name WHERE id = @id`);
+const deleteFolderStmt = db.prepare(`DELETE FROM folders WHERE id = ?`);
+const clearFolderRefStmt = db.prepare(`UPDATE accounts SET folder_id = NULL WHERE folder_id = ?`);
+const setAccountFolderStmt = db.prepare(`UPDATE accounts SET folder_id = @folderId WHERE id = @id`);
+
+export function listFolders(): FolderRow[] {
+  return listFoldersStmt.all() as FolderRow[];
+}
+
+export function createFolder(name: string): FolderRow {
+  const info = createFolderStmt.run({ name, createdAt: new Date().toISOString() });
+  return { id: Number(info.lastInsertRowid), name, created_at: new Date().toISOString() };
+}
+
+export function renameFolder(id: number, name: string): void {
+  renameFolderStmt.run({ id, name });
+}
+
+/** Remove a pasta e desvincula as contas que estavam nela. */
+export function deleteFolder(id: number): void {
+  const tx = db.transaction(() => {
+    clearFolderRefStmt.run(id);
+    deleteFolderStmt.run(id);
+  });
+  tx();
+}
+
+/** Define (ou remove, com null) a pasta de uma conta. */
+export function setAccountFolder(id: string, folderId: number | null): void {
+  setAccountFolderStmt.run({ id: normalizeId(id), folderId });
 }
 
 // ---------- Funções de persistência ----------

@@ -582,6 +582,48 @@ th.num {
   min-height: 20px;
 }
 
+/* ---------- Pastas ---------- */
+.folder-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.folder-acc {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 8px;
+}
+.folder-acc:hover {
+  background: var(--surface-2);
+}
+.folder-acc-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.folder-acc-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.folder-acc-right .select {
+  padding: 5px 8px;
+  font-size: 13px;
+}
+
 /* ---------- Login ---------- */
 .login-wrap {
   min-height: 100vh;

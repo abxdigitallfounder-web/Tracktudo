@@ -15,7 +15,14 @@ export interface Account {
   available: number | null;
   pctUsed: number | null;
   tags: string[];
+  folderId: number | null;
   capturedAt: string | null;
+}
+
+export interface Folder {
+  id: number;
+  name: string;
+  created_at: string;
 }
 
 export interface DailySpendRow {
@@ -100,4 +107,36 @@ export async function apiSetAccountTags(id: string, tags: string[]): Promise<str
   });
   const json = (await res.json()) as { tags?: string[] };
   return json.tags ?? tags;
+}
+
+// ---- Pastas ----
+export const apiListFolders = () => get<Folder[]>('/api/folders');
+
+export async function apiCreateFolder(name: string): Promise<Folder> {
+  const res = await fetch('/api/folders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  return res.json();
+}
+
+export async function apiRenameFolder(id: number, name: string): Promise<void> {
+  await fetch(`/api/folders/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function apiDeleteFolder(id: number): Promise<void> {
+  await fetch(`/api/folders/${id}`, { method: 'DELETE' });
+}
+
+export async function apiSetAccountFolder(id: string, folderId: number | null): Promise<void> {
+  await fetch(`/api/accounts/${id}/folder`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folderId }),
+  });
 }
