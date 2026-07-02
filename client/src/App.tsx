@@ -5,6 +5,14 @@ import { LimitsPage } from './pages/LimitsPage';
 import { DailySpendPage } from './pages/DailySpendPage';
 import { Login } from './pages/Login';
 import { TokenBanner } from './components/TokenBanner';
+import {
+  IconGauge,
+  IconChart,
+  IconRefresh,
+  IconSun,
+  IconMoon,
+  IconLogout,
+} from './components/icons';
 
 type Tab = 'limits' | 'daily';
 type Theme = 'light' | 'dark';
@@ -97,48 +105,71 @@ export default function App() {
     return <Login onSuccess={() => setAuthed(true)} />;
   }
 
+  const pageTitle = tab === 'limits' ? 'Limites' : 'Gastos Diários';
+
   return (
-    <div className="app">
-      <div className="topbar">
-        <div className="brand">
-          TRACK<span>TUDO</span>
+    <div className="layout">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <span className="logo">T</span>
+          TRACK<span style={{ color: 'var(--primary)' }}>TUDO</span>
         </div>
-        <div className="tabs">
+
+        <div className="nav-section">Painel</div>
+        <nav className="nav">
           <button
-            className={`tab ${tab === 'limits' ? 'active' : ''}`}
+            className={`nav-item ${tab === 'limits' ? 'active' : ''}`}
             onClick={() => setTab('limits')}
           >
+            <IconGauge />
             Limites
           </button>
           <button
-            className={`tab ${tab === 'daily' ? 'active' : ''}`}
+            className={`nav-item ${tab === 'daily' ? 'active' : ''}`}
             onClick={() => setTab('daily')}
           >
+            <IconChart />
             Gastos Diários
           </button>
+        </nav>
+
+        <div className="sidebar-footer">
+          <button className="nav-item" onClick={handleRefresh} disabled={collecting}>
+            <IconRefresh />
+            {collecting ? 'Atualizando…' : 'Atualizar agora'}
+          </button>
+          <button className="nav-item" onClick={toggleTheme}>
+            {theme === 'light' ? <IconMoon /> : <IconSun />}
+            Tema {theme === 'light' ? 'escuro' : 'claro'}
+          </button>
+          <button className="nav-item" onClick={handleLogout}>
+            <IconLogout />
+            Sair
+          </button>
         </div>
-        <span className="spacer" />
-        <span className="status-line">
-          {collecting ? '🔄 Coletando dados…' : `Atualizado ${timeAgo(lastUpdate ?? null)}`}
-        </span>
-        <button className="icon-btn" onClick={toggleTheme} title="Alternar tema">
-          {theme === 'light' ? '🌙' : '☀️'}
-        </button>
-        <button className="btn primary" onClick={handleRefresh} disabled={collecting}>
-          {collecting ? 'Atualizando…' : '⟳ Atualizar agora'}
-        </button>
-        <button className="icon-btn" onClick={handleLogout} title="Sair">
-          ⎋
-        </button>
-      </div>
+      </aside>
 
-      <TokenBanner />
+      <main className="main">
+        <div className="main-header">
+          <h1 className="page-title">{pageTitle}</h1>
+          <span className="spacer" />
+          <span className="status-line">
+            {collecting ? '🔄 Coletando dados…' : `Atualizado ${timeAgo(lastUpdate ?? null)}`}
+          </span>
+          <button className="btn primary" onClick={handleRefresh} disabled={collecting}>
+            <IconRefresh className="btn-icon" />
+            {collecting ? 'Atualizando…' : 'Atualizar agora'}
+          </button>
+        </div>
 
-      {tab === 'limits' ? (
-        <LimitsPage reloadKey={reloadKey} />
-      ) : (
-        <DailySpendPage reloadKey={reloadKey} />
-      )}
+        <TokenBanner />
+
+        {tab === 'limits' ? (
+          <LimitsPage reloadKey={reloadKey} />
+        ) : (
+          <DailySpendPage reloadKey={reloadKey} />
+        )}
+      </main>
     </div>
   );
 }
