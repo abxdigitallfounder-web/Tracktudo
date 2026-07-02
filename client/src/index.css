@@ -587,8 +587,32 @@ th.num {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 12px;
   flex-wrap: wrap;
+}
+.folder-list {
+  margin-top: 12px;
+}
+.folder-toggle {
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px;
+  border-radius: 6px;
+}
+.folder-toggle:hover {
+  color: var(--primary);
+}
+.chevron {
+  font-size: 11px;
+  color: var(--text-muted);
+  width: 12px;
+  display: inline-block;
 }
 .folder-list {
   display: flex;

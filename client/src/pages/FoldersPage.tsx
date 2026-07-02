@@ -19,6 +19,17 @@ export function FoldersPage({ reloadKey }: { reloadKey: number }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  // "Sem pasta" começa recolhida (costuma ter muitas contas).
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set([NO_FOLDER]));
+
+  function toggleCollapse(key: number) {
+    setCollapsed((prev) => {
+      const n = new Set(prev);
+      if (n.has(key)) n.delete(key);
+      else n.add(key);
+      return n;
+    });
+  }
 
   useEffect(() => {
     let alive = true;
@@ -113,15 +124,17 @@ export function FoldersPage({ reloadKey }: { reloadKey: number }) {
   function renderGroup(key: number, name: string, deletable?: Folder) {
     const list = (byFolder.get(key) ?? []).sort((a, b) => b.amountSpent - a.amountSpent);
     const totals = totalsByCurrency(list);
+    const isCollapsed = collapsed.has(key);
     return (
       <div className="panel" key={key}>
         <div className="folder-head">
-          <h3 style={{ margin: 0 }}>
+          <button className="folder-toggle" onClick={() => toggleCollapse(key)}>
+            <span className="chevron">{isCollapsed ? '▸' : '▾'}</span>
             {key === NO_FOLDER ? '📂' : '📁'} {name}{' '}
             <span className="muted" style={{ fontWeight: 400 }}>
               ({list.length})
             </span>
-          </h3>
+          </button>
           <span className="spacer" />
           <span className="muted" style={{ fontSize: 13 }}>
             {Object.entries(totals)
@@ -139,13 +152,14 @@ export function FoldersPage({ reloadKey }: { reloadKey: number }) {
             </>
           )}
         </div>
-        {list.length === 0 ? (
-          <div className="muted" style={{ fontSize: 13 }}>
-            Nenhuma conta aqui. Use o seletor nas contas para movê-las.
-          </div>
-        ) : (
-          <div className="folder-list">{list.map(renderAccountRow)}</div>
-        )}
+        {!isCollapsed &&
+          (list.length === 0 ? (
+            <div className="muted" style={{ fontSize: 13 }}>
+              Nenhuma conta aqui. Use o seletor nas contas para movê-las.
+            </div>
+          ) : (
+            <div className="folder-list">{list.map(renderAccountRow)}</div>
+          ))}
       </div>
     );
   }
