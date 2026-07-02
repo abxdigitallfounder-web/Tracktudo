@@ -152,6 +152,14 @@ export function DailySpendPage({ reloadKey }: { reloadKey: number }) {
     setUntil(ymd(u));
   }
 
+  function setSingleDay(daysAgo: number) {
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    const day = ymd(d);
+    setSince(day);
+    setUntil(day);
+  }
+
   return (
     <>
       <div className="toolbar">
@@ -176,6 +184,12 @@ export function DailySpendPage({ reloadKey }: { reloadKey: number }) {
             onChange={(e) => setUntil(e.target.value)}
           />
         </label>
+        <button className="btn" onClick={() => setSingleDay(0)}>
+          Hoje
+        </button>
+        <button className="btn" onClick={() => setSingleDay(1)}>
+          Ontem
+        </button>
         <button className="btn" onClick={() => setPreset(7)}>
           7 dias
         </button>
