@@ -48,7 +48,13 @@ export function LimitsPage({ reloadKey }: { reloadKey: number }) {
   const filtered = useMemo(() => {
     let list = accounts;
     const q = search.trim().toLowerCase();
-    if (q) list = list.filter((a) => a.name.toLowerCase().includes(q) || a.id.includes(q));
+    if (q)
+      list = list.filter(
+        (a) =>
+          a.name.toLowerCase().includes(q) ||
+          a.id.includes(q) ||
+          (a.businessName?.toLowerCase().includes(q) ?? false),
+      );
     if (statusFilter === 'active') list = list.filter((a) => a.status === 1);
     else if (statusFilter === 'inactive') list = list.filter((a) => a.status !== 1);
     else if (statusFilter === 'risk')
@@ -173,7 +179,12 @@ export function LimitsPage({ reloadKey }: { reloadKey: number }) {
                   <tr key={a.id} className={rowCls}>
                     <td>
                       <strong>{a.name}</strong>
-                      <div className="muted" style={{ fontSize: 12 }}>
+                      {a.businessName && (
+                        <div className="muted" style={{ fontSize: 12 }}>
+                          🏢 {a.businessName}
+                        </div>
+                      )}
+                      <div className="muted" style={{ fontSize: 11, opacity: 0.7 }}>
                         {a.id}
                       </div>
                     </td>

@@ -21,6 +21,8 @@ api.get('/accounts', (_req, res) => {
     status: r.status,
     statusLabel: accountStatusLabel(r.status),
     disableReason: r.disable_reason,
+    businessId: r.business_id,
+    businessName: r.business_name,
     spendCap: r.spend_cap,
     amountSpent: r.amount_spent ?? 0,
     balance: r.balance,

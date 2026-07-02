@@ -10,6 +10,7 @@ export interface RawAdAccount {
   balance?: string; // em centavos
   currency?: string;
   disable_reason?: number;
+  business?: { id: string; name: string };
 }
 
 /** Uma linha de insights diários (level=account, time_increment=1). */
@@ -45,6 +46,8 @@ export interface AdAccount {
   status: number;
   disableReason: number | null;
   currency: string;
+  businessId: string | null;
+  businessName: string | null;
   spendCap: number | null; // null = sem limite definido
   amountSpent: number;
   balance: number | null;

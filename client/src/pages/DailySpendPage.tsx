@@ -180,7 +180,8 @@ export function DailySpendPage({ reloadKey }: { reloadKey: number }) {
           <option value="all">Todas as contas</option>
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name} ({a.currency})
+              {a.name}
+              {a.businessName ? ` — ${a.businessName}` : ''} ({a.currency})
             </option>
           ))}
         </select>
@@ -271,6 +272,11 @@ export function DailySpendPage({ reloadKey }: { reloadKey: number }) {
                   <tr key={id}>
                     <td>
                       <strong>{acc?.name ?? id}</strong>
+                      {acc?.businessName && (
+                        <div className="muted" style={{ fontSize: 11 }}>
+                          🏢 {acc.businessName}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <span className="badge muted">{cur}</span>

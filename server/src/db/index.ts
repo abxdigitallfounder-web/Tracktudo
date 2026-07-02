@@ -33,6 +33,8 @@ function createTables(): void {
       currency      TEXT NOT NULL DEFAULT '',
       status        INTEGER NOT NULL DEFAULT 0,
       disable_reason INTEGER,
+      business_id   TEXT,                    -- id do Business Manager dono
+      business_name TEXT,                    -- nome do Business Manager dono
       updated_at    TEXT NOT NULL            -- ISO 8601
     );
 
@@ -63,6 +65,16 @@ function createTables(): void {
       value TEXT NOT NULL
     );
   `);
+  migrateColumns();
+}
+
+/** Adiciona colunas novas a bancos já existentes (idempotente). */
+function migrateColumns(): void {
+  const cols = new Set(
+    (db.prepare(`PRAGMA table_info(accounts)`).all() as Array<{ name: string }>).map((c) => c.name),
+  );
+  if (!cols.has('business_id')) db.exec(`ALTER TABLE accounts ADD COLUMN business_id TEXT`);
+  if (!cols.has('business_name')) db.exec(`ALTER TABLE accounts ADD COLUMN business_name TEXT`);
 }
 
 // Garante que as tabelas existem ANTES de compilar os statements abaixo.
@@ -71,13 +83,17 @@ createTables();
 // ---------- Statements preparados ----------
 
 const upsertAccountStmt = db.prepare(`
-  INSERT INTO accounts (id, name, currency, status, disable_reason, updated_at)
-  VALUES (@id, @name, @currency, @status, @disableReason, @updatedAt)
+  INSERT INTO accounts
+    (id, name, currency, status, disable_reason, business_id, business_name, updated_at)
+  VALUES
+    (@id, @name, @currency, @status, @disableReason, @businessId, @businessName, @updatedAt)
   ON CONFLICT(id) DO UPDATE SET
     name = excluded.name,
     currency = excluded.currency,
     status = excluded.status,
     disable_reason = excluded.disable_reason,
+    business_id = excluded.business_id,
+    business_name = excluded.business_name,
     updated_at = excluded.updated_at
 `);
 
@@ -111,6 +127,8 @@ export function saveAccountSnapshot(acc: AdAccount, capturedAt: string): void {
       currency: acc.currency,
       status: acc.status,
       disableReason: acc.disableReason,
+      businessId: acc.businessId,
+      businessName: acc.businessName,
       updatedAt: capturedAt,
     });
     insertSnapshotStmt.run({

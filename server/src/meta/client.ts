@@ -145,6 +145,8 @@ function normalizeAccount(raw: RawAdAccount): AdAccount {
     status: raw.account_status ?? 0,
     disableReason: raw.disable_reason ?? null,
     currency: raw.currency ?? '',
+    businessId: raw.business?.id ?? null,
+    businessName: raw.business?.name ?? null,
     spendCap: hasCap ? spendCap : null,
     amountSpent,
     balance,
@@ -178,7 +180,8 @@ async function listAdAccountsForToken(token: string, label: string): Promise<AdA
   do {
     page += 1;
     const params: Record<string, string> = {
-      fields: 'name,account_status,spend_cap,amount_spent,balance,currency,disable_reason',
+      fields:
+        'name,account_status,spend_cap,amount_spent,balance,currency,disable_reason,business{id,name}',
       limit: '50',
     };
     if (after) params.after = after;

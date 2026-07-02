@@ -7,6 +7,8 @@ export interface Account {
   status: number;
   statusLabel: string;
   disableReason: number | null;
+  businessId: string | null;
+  businessName: string | null;
   spendCap: number | null;
   amountSpent: number;
   balance: number | null;
