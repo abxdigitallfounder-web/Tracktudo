@@ -9,6 +9,7 @@ export interface AccountRow {
   disable_reason: number | null;
   business_id: string | null;
   business_name: string | null;
+  tags: string | null; // JSON array (string) ou null
   updated_at: string;
   spend_cap: number | null;
   amount_spent: number | null;
@@ -27,7 +28,7 @@ export interface DailySpendRow {
 const accountsWithLatestStmt = db.prepare(`
   SELECT
     a.id, a.name, a.currency, a.status, a.disable_reason,
-    a.business_id, a.business_name, a.updated_at,
+    a.business_id, a.business_name, a.tags, a.updated_at,
     s.spend_cap, s.amount_spent, s.balance, s.available, s.pct_used, s.captured_at
   FROM accounts a
   LEFT JOIN limit_snapshots s ON s.id = (

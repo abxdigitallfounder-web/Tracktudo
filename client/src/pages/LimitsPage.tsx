@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { apiGetAccounts, apiGetSummary, type Account, type Summary } from '../api';
 import { formatMoney } from '../format';
 import { MoneyByCurrency, StatusBadge, UsageBar, riskLevel } from '../components/widgets';
+import { TagMenu } from '../components/TagMenu';
 
 type SortKey = 'name' | 'status' | 'spendCap' | 'amountSpent' | 'available' | 'pctUsed';
 type SortDir = 'asc' | 'desc';
@@ -23,6 +24,7 @@ export function LimitsPage({ reloadKey }: { reloadKey: number }) {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'risk'>('all');
   const [sortKey, setSortKey] = useState<SortKey>('amountSpent');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [menu, setMenu] = useState<{ account: Account; x: number; y: number } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -53,7 +55,8 @@ export function LimitsPage({ reloadKey }: { reloadKey: number }) {
         (a) =>
           a.name.toLowerCase().includes(q) ||
           a.id.includes(q) ||
-          (a.businessName?.toLowerCase().includes(q) ?? false),
+          (a.businessName?.toLowerCase().includes(q) ?? false) ||
+          a.tags.some((t) => t.toLowerCase().includes(q)),
       );
     if (statusFilter === 'active') list = list.filter((a) => a.status === 1);
     else if (statusFilter === 'inactive') list = list.filter((a) => a.status !== 1);
@@ -130,6 +133,10 @@ export function LimitsPage({ reloadKey }: { reloadKey: number }) {
           <option value="risk">Em risco (≥75%)</option>
         </select>
         <span className="muted">{filtered.length} contas</span>
+        <span className="spacer" />
+        <span className="muted" style={{ fontSize: 12 }}>
+          💡 Clique com o botão direito numa conta para adicionar tags
+        </span>
       </div>
 
       {statusOptions.length > 0 && summary && summary.notActive > 0 && (
@@ -176,7 +183,14 @@ export function LimitsPage({ reloadKey }: { reloadKey: number }) {
                 const rowCls =
                   level === 'danger' ? 'row-danger' : level === 'warn' ? 'row-warn' : '';
                 return (
-                  <tr key={a.id} className={rowCls}>
+                  <tr
+                    key={a.id}
+                    className={rowCls}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setMenu({ account: a, x: e.clientX, y: e.clientY });
+                    }}
+                  >
                     <td>
                       <strong>{a.name}</strong>
                       {a.businessName && (
@@ -187,6 +201,15 @@ export function LimitsPage({ reloadKey }: { reloadKey: number }) {
                       <div className="muted" style={{ fontSize: 11, opacity: 0.7 }}>
                         {a.id}
                       </div>
+                      {a.tags.length > 0 && (
+                        <div className="tag-list">
+                          {a.tags.map((t) => (
+                            <span key={t} className="tag-chip static">
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <StatusBadge account={a} />
@@ -218,6 +241,20 @@ export function LimitsPage({ reloadKey }: { reloadKey: number }) {
           </tbody>
         </table>
       </div>
+
+      {menu && (
+        <TagMenu
+          account={menu.account}
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          onSaved={(accountId, tags) =>
+            setAccounts((prev) =>
+              prev.map((a) => (a.id === accountId ? { ...a, tags } : a)),
+            )
+          }
+        />
+      )}
     </>
   );
 }

@@ -4,7 +4,7 @@ import {
   getDailySpendRange,
   getSummary,
 } from '../db/queries.js';
-import { getState } from '../db/index.js';
+import { getState, setAccountTags } from '../db/index.js';
 import { accountStatusLabel } from '../meta/accountStatus.js';
 import { collectAll, isCollecting, today } from '../services/collector.js';
 import { getTokensInfo } from '../meta/tokenInfo.js';
@@ -23,6 +23,7 @@ api.get('/accounts', (_req, res) => {
     disableReason: r.disable_reason,
     businessId: r.business_id,
     businessName: r.business_name,
+    tags: parseTags(r.tags),
     spendCap: r.spend_cap,
     amountSpent: r.amount_spent ?? 0,
     balance: r.balance,
@@ -62,6 +63,20 @@ api.get('/status', (_req, res) => {
   });
 });
 
+/** Define as tags de uma conta. Body: { tags: string[] }. */
+api.put('/accounts/:id/tags', (req, res) => {
+  const body = req.body as { tags?: unknown };
+  if (!Array.isArray(body.tags) || !body.tags.every((t) => typeof t === 'string')) {
+    res.status(400).json({ error: 'tags deve ser um array de strings' });
+    return;
+  }
+  const tags = [
+    ...new Set((body.tags as string[]).map((t) => t.trim()).filter(Boolean)),
+  ].slice(0, 20);
+  setAccountTags(req.params.id, tags);
+  res.json({ ok: true, tags });
+});
+
 /** Validade dos tokens (para o monitor de expiração no dashboard). */
 api.get('/token-health', async (_req, res) => {
   try {
@@ -98,3 +113,13 @@ function parseRange(query: qs): { since: string; until: string } {
 }
 
 type qs = Record<string, unknown>;
+
+function parseTags(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter((t): t is string => typeof t === 'string') : [];
+  } catch {
+    return [];
+  }
+}

@@ -14,6 +14,7 @@ export interface Account {
   balance: number | null;
   available: number | null;
   pctUsed: number | null;
+  tags: string[];
   capturedAt: string | null;
 }
 
@@ -89,4 +90,14 @@ export async function apiLogin(password: string): Promise<{ ok: boolean; error?:
 
 export async function apiLogout(): Promise<void> {
   await fetch('/api/logout', { method: 'POST' });
+}
+
+export async function apiSetAccountTags(id: string, tags: string[]): Promise<string[]> {
+  const res = await fetch(`/api/accounts/${id}/tags`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tags }),
+  });
+  const json = (await res.json()) as { tags?: string[] };
+  return json.tags ?? tags;
 }

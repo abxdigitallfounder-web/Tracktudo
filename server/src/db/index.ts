@@ -35,6 +35,7 @@ function createTables(): void {
       disable_reason INTEGER,
       business_id   TEXT,                    -- id do Business Manager dono
       business_name TEXT,                    -- nome do Business Manager dono
+      tags          TEXT,                    -- tags do usuário (JSON array)
       updated_at    TEXT NOT NULL            -- ISO 8601
     );
 
@@ -75,6 +76,7 @@ function migrateColumns(): void {
   );
   if (!cols.has('business_id')) db.exec(`ALTER TABLE accounts ADD COLUMN business_id TEXT`);
   if (!cols.has('business_name')) db.exec(`ALTER TABLE accounts ADD COLUMN business_name TEXT`);
+  if (!cols.has('tags')) db.exec(`ALTER TABLE accounts ADD COLUMN tags TEXT`);
 }
 
 // Garante que as tabelas existem ANTES de compilar os statements abaixo.
@@ -115,6 +117,14 @@ const setStateStmt = db.prepare(`
   ON CONFLICT(key) DO UPDATE SET value = excluded.value
 `);
 const getStateStmt = db.prepare(`SELECT value FROM meta_state WHERE key = ?`);
+
+// Tags são definidas pelo usuário — o upsert da Meta NÃO as toca (preserva).
+const setTagsStmt = db.prepare(`UPDATE accounts SET tags = @tags WHERE id = @id`);
+
+/** Salva as tags (array) de uma conta. */
+export function setAccountTags(id: string, tags: string[]): void {
+  setTagsStmt.run({ id: normalizeId(id), tags: JSON.stringify(tags) });
+}
 
 // ---------- Funções de persistência ----------
 
