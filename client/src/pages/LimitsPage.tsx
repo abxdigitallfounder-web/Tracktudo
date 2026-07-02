@@ -3,6 +3,7 @@ import { apiGetAccounts, apiGetSummary, type Account, type Summary } from '../ap
 import { formatMoney } from '../format';
 import { MoneyByCurrency, StatusBadge, UsageBar, riskLevel } from '../components/widgets';
 import { TagMenu } from '../components/TagMenu';
+import { statusPriority } from '../accountSort';
 
 type SortKey = 'name' | 'status' | 'spendCap' | 'amountSpent' | 'available' | 'pctUsed';
 type SortDir = 'asc' | 'desc';
@@ -65,6 +66,9 @@ export function LimitsPage({ reloadKey }: { reloadKey: number }) {
 
     const dir = sortDir === 'asc' ? 1 : -1;
     return [...list].sort((a, b) => {
+      // Ordem de status sempre primeiro: Ativa > Não quitada > Desativada > resto.
+      const sp = statusPriority(a.status) - statusPriority(b.status);
+      if (sp !== 0) return sp;
       const av = a[sortKey];
       const bv = b[sortKey];
       // Nulos (ex.: "Sem limite") sempre no fim, independente da direção.

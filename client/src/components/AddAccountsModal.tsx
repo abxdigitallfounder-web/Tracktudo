@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { apiAddAccountsToFolder, type Account, type Folder } from '../api';
 import { formatMoney } from '../format';
+import { compareByStatus } from '../accountSort';
 
 interface Props {
   folder: Folder;
@@ -22,13 +23,15 @@ export function AddAccountsModal({ folder, accounts, onClose, onAdded }: Props) 
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return available;
-    return available.filter(
-      (a) =>
-        a.name.toLowerCase().includes(q) ||
-        a.id.includes(q) ||
-        (a.businessName?.toLowerCase().includes(q) ?? false),
-    );
+    const base = !q
+      ? available
+      : available.filter(
+          (a) =>
+            a.name.toLowerCase().includes(q) ||
+            a.id.includes(q) ||
+            (a.businessName?.toLowerCase().includes(q) ?? false),
+        );
+    return [...base].sort((a, b) => compareByStatus(a, b));
   }, [available, search]);
 
   function toggle(id: string) {

@@ -16,6 +16,7 @@ import {
   type DailySpendRow,
 } from '../api';
 import { formatMoney, formatDayMonth, formatNumber } from '../format';
+import { statusPriority, compareByStatus } from '../accountSort';
 
 // Paleta para as linhas do gráfico (uma por moeda).
 const CURRENCY_COLORS = ['#4f46e5', '#16a34a', '#f59e0b', '#dc2626', '#0ea5e9', '#a855f7'];
@@ -73,6 +74,12 @@ export function DailySpendPage({ reloadKey }: { reloadKey: number }) {
 
   const days = useMemo(() => daysBetween(since, until), [since, until]);
 
+  // Contas ordenadas por status (para o seletor).
+  const sortedAccounts = useMemo(
+    () => [...accounts].sort((a, b) => compareByStatus(a, b)),
+    [accounts],
+  );
+
   // Filtra as linhas conforme a conta selecionada.
   const visibleRows = useMemo(
     () => (accountFilter === 'all' ? rows : rows.filter((r) => r.account_id === accountFilter)),
@@ -113,9 +120,16 @@ export function DailySpendPage({ reloadKey }: { reloadKey: number }) {
       const total = [...byDay.values()].reduce((s, v) => s + v, 0);
       return { id, byDay, total };
     });
-    list.sort((a, b) => b.total - a.total);
+    // Status primeiro (Ativa > Não quitada > Desativada), gasto como desempate.
+    list.sort((a, b) => {
+      const sp =
+        statusPriority(accById.get(a.id)?.status ?? 999) -
+        statusPriority(accById.get(b.id)?.status ?? 999);
+      if (sp !== 0) return sp;
+      return b.total - a.total;
+    });
     return list;
-  }, [visibleRows]);
+  }, [visibleRows, accById]);
 
   // Totais por moeda: por dia e geral.
   const totalsByCurrency = useMemo(() => {
@@ -178,7 +192,7 @@ export function DailySpendPage({ reloadKey }: { reloadKey: number }) {
           onChange={(e) => setAccountFilter(e.target.value)}
         >
           <option value="all">Todas as contas</option>
-          {accounts.map((a) => (
+          {sortedAccounts.map((a) => (
             <option key={a.id} value={a.id}>
               {a.name}
               {a.businessName ? ` — ${a.businessName}` : ''} ({a.currency})

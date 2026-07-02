@@ -38,7 +38,9 @@ const accountsWithLatestStmt = db.prepare(`
     ORDER BY captured_at DESC, id DESC
     LIMIT 1
   )
-  ORDER BY a.name COLLATE NOCASE
+  ORDER BY
+    CASE a.status WHEN 1 THEN 0 WHEN 3 THEN 1 WHEN 2 THEN 2 ELSE 3 END,
+    a.name COLLATE NOCASE
 `);
 
 export function getAccountsWithLatestSnapshot(): AccountRow[] {

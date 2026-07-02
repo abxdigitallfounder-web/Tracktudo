@@ -12,6 +12,7 @@ import { formatMoney } from '../format';
 import { StatusBadge } from '../components/widgets';
 import { CreateFolderModal } from '../components/CreateFolderModal';
 import { AddAccountsModal } from '../components/AddAccountsModal';
+import { compareByStatus } from '../accountSort';
 
 const NO_FOLDER = -1; // chave interna para "Sem pasta"
 
@@ -130,7 +131,9 @@ export function FoldersPage({ reloadKey }: { reloadKey: number }) {
   }
 
   function renderGroup(key: number, name: string, deletable?: Folder) {
-    const list = (byFolder.get(key) ?? []).sort((a, b) => b.amountSpent - a.amountSpent);
+    const list = (byFolder.get(key) ?? []).sort((a, b) =>
+      compareByStatus(a, b, (x, y) => y.amountSpent - x.amountSpent),
+    );
     const totals = totalsByCurrency(list);
     const isCollapsed = collapsed.has(key);
     return (
