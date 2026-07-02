@@ -112,11 +112,11 @@ export async function apiSetAccountTags(id: string, tags: string[]): Promise<str
 // ---- Pastas ----
 export const apiListFolders = () => get<Folder[]>('/api/folders');
 
-export async function apiCreateFolder(name: string): Promise<Folder> {
+export async function apiCreateFolder(name: string, accountIds: string[] = []): Promise<Folder> {
   const res = await fetch('/api/folders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, accountIds }),
   });
   return res.json();
 }

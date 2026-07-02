@@ -175,6 +175,14 @@ export function setAccountFolder(id: string, folderId: number | null): void {
   setAccountFolderStmt.run({ id: normalizeId(id), folderId });
 }
 
+/** Atribui várias contas a uma pasta de uma vez (transação). */
+export function setAccountsFolder(folderId: number | null, ids: string[]): void {
+  const tx = db.transaction((items: string[]) => {
+    for (const id of items) setAccountFolderStmt.run({ id: normalizeId(id), folderId });
+  });
+  tx(ids);
+}
+
 // ---------- Funções de persistência ----------
 
 /** Grava uma conta e um snapshot de limite (numa transação). */

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   apiGetAccounts,
   apiListFolders,
-  apiCreateFolder,
   apiRenameFolder,
   apiDeleteFolder,
   apiSetAccountFolder,
@@ -11,6 +10,7 @@ import {
 } from '../api';
 import { formatMoney } from '../format';
 import { StatusBadge } from '../components/widgets';
+import { CreateFolderModal } from '../components/CreateFolderModal';
 
 const NO_FOLDER = -1; // chave interna para "Sem pasta"
 
@@ -18,7 +18,7 @@ export function FoldersPage({ reloadKey }: { reloadKey: number }) {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newName, setNewName] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -45,12 +45,13 @@ export function FoldersPage({ reloadKey }: { reloadKey: number }) {
     return map;
   }, [accounts]);
 
-  async function handleCreate() {
-    const name = newName.trim();
-    if (!name) return;
-    const folder = await apiCreateFolder(name);
-    setFolders((prev) => [...prev, folder].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
-    setNewName('');
+  function handleCreated(folder: Folder, accountIds: string[]) {
+    setFolders((prev) =>
+      [...prev, folder].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+    );
+    const ids = new Set(accountIds);
+    setAccounts((prev) => prev.map((a) => (ids.has(a.id) ? { ...a, folderId: folder.id } : a)));
+    setShowCreate(false);
   }
 
   async function handleRename(f: Folder) {
@@ -154,23 +155,22 @@ export function FoldersPage({ reloadKey }: { reloadKey: number }) {
   return (
     <>
       <div className="toolbar">
-        <input
-          className="input"
-          placeholder="Nome da nova pasta…"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void handleCreate();
-          }}
-        />
-        <button className="btn primary" onClick={handleCreate} disabled={!newName.trim()}>
-          + Criar pasta
+        <button className="btn primary" onClick={() => setShowCreate(true)}>
+          + Nova pasta
         </button>
         <span className="muted">{folders.length} pasta(s)</span>
       </div>
 
       {folders.map((f) => renderGroup(f.id, f.name, f))}
       {renderGroup(NO_FOLDER, 'Sem pasta')}
+
+      {showCreate && (
+        <CreateFolderModal
+          accounts={accounts}
+          onClose={() => setShowCreate(false)}
+          onCreated={handleCreated}
+        />
+      )}
     </>
   );
 }

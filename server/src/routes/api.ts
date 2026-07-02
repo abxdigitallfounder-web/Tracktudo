@@ -12,6 +12,7 @@ import {
   renameFolder,
   deleteFolder,
   setAccountFolder,
+  setAccountsFolder,
 } from '../db/index.js';
 import { accountStatusLabel } from '../meta/accountStatus.js';
 import { collectAll, isCollecting, today } from '../services/collector.js';
@@ -92,12 +93,19 @@ api.get('/folders', (_req, res) => {
 });
 
 api.post('/folders', (req, res) => {
-  const name = String((req.body as { name?: unknown })?.name ?? '').trim();
+  const body = req.body as { name?: unknown; accountIds?: unknown };
+  const name = String(body?.name ?? '').trim();
   if (!name) {
     res.status(400).json({ error: 'nome obrigatório' });
     return;
   }
-  res.status(201).json(createFolder(name.slice(0, 60)));
+  const folder = createFolder(name.slice(0, 60));
+  // Opcional: já move as contas selecionadas para a nova pasta.
+  if (Array.isArray(body.accountIds)) {
+    const ids = body.accountIds.filter((x): x is string => typeof x === 'string');
+    if (ids.length > 0) setAccountsFolder(folder.id, ids);
+  }
+  res.status(201).json(folder);
 });
 
 api.put('/folders/:id', (req, res) => {
