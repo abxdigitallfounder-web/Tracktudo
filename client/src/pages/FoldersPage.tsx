@@ -11,6 +11,7 @@ import {
 import { formatMoney } from '../format';
 import { StatusBadge } from '../components/widgets';
 import { CreateFolderModal } from '../components/CreateFolderModal';
+import { AddAccountsModal } from '../components/AddAccountsModal';
 
 const NO_FOLDER = -1; // chave interna para "Sem pasta"
 
@@ -19,6 +20,7 @@ export function FoldersPage({ reloadKey }: { reloadKey: number }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [addTo, setAddTo] = useState<Folder | null>(null);
   // "Sem pasta" começa recolhida (costuma ter muitas contas).
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set([NO_FOLDER]));
 
@@ -79,6 +81,12 @@ export function FoldersPage({ reloadKey }: { reloadKey: number }) {
     await apiDeleteFolder(f.id);
     setFolders((prev) => prev.filter((x) => x.id !== f.id));
     setAccounts((prev) => prev.map((a) => (a.folderId === f.id ? { ...a, folderId: null } : a)));
+  }
+
+  function handleAdded(folderId: number, accountIds: string[]) {
+    const ids = new Set(accountIds);
+    setAccounts((prev) => prev.map((a) => (ids.has(a.id) ? { ...a, folderId } : a)));
+    setAddTo(null);
   }
 
   async function moveAccount(accountId: string, folderId: number | null) {
@@ -143,6 +151,9 @@ export function FoldersPage({ reloadKey }: { reloadKey: number }) {
           </span>
           {deletable && (
             <>
+              <button className="btn primary" onClick={() => setAddTo(deletable)}>
+                + Adicionar
+              </button>
               <button className="btn" onClick={() => handleRename(deletable)}>
                 Renomear
               </button>
@@ -183,6 +194,15 @@ export function FoldersPage({ reloadKey }: { reloadKey: number }) {
           accounts={accounts}
           onClose={() => setShowCreate(false)}
           onCreated={handleCreated}
+        />
+      )}
+
+      {addTo && (
+        <AddAccountsModal
+          folder={addTo}
+          accounts={accounts}
+          onClose={() => setAddTo(null)}
+          onAdded={handleAdded}
         />
       )}
     </>

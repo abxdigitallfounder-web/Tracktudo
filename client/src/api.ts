@@ -133,6 +133,17 @@ export async function apiDeleteFolder(id: number): Promise<void> {
   await fetch(`/api/folders/${id}`, { method: 'DELETE' });
 }
 
+export async function apiAddAccountsToFolder(
+  folderId: number,
+  accountIds: string[],
+): Promise<void> {
+  await fetch(`/api/folders/${folderId}/accounts`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accountIds }),
+  });
+}
+
 export async function apiSetAccountFolder(id: string, folderId: number | null): Promise<void> {
   await fetch(`/api/accounts/${id}/folder`, {
     method: 'PUT',

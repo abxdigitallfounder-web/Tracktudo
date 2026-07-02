@@ -123,6 +123,18 @@ api.delete('/folders/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+/** Adiciona (move) várias contas para uma pasta existente. */
+api.put('/folders/:id/accounts', (req, res) => {
+  const body = req.body as { accountIds?: unknown };
+  if (!Array.isArray(body.accountIds)) {
+    res.status(400).json({ error: 'accountIds deve ser um array' });
+    return;
+  }
+  const ids = body.accountIds.filter((x): x is string => typeof x === 'string');
+  setAccountsFolder(Number(req.params.id), ids);
+  res.json({ ok: true, count: ids.length });
+});
+
 /** Move uma conta para uma pasta (ou remove com folderId null). */
 api.put('/accounts/:id/folder', (req, res) => {
   const raw = (req.body as { folderId?: unknown })?.folderId;
