@@ -1,22 +1,26 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiAuthStatus, apiGetStatus, apiLogout, apiRefresh, type Status } from './api';
 import { timeAgo } from './format';
+import { DashboardPage } from './pages/DashboardPage';
 import { LimitsPage } from './pages/LimitsPage';
 import { DailySpendPage } from './pages/DailySpendPage';
 import { FoldersPage } from './pages/FoldersPage';
+import { RevenuePage } from './pages/RevenuePage';
 import { Login } from './pages/Login';
 import { TokenBanner } from './components/TokenBanner';
 import {
+  IconGrid,
   IconGauge,
   IconChart,
   IconFolder,
+  IconMoney,
   IconRefresh,
   IconSun,
   IconMoon,
   IconLogout,
 } from './components/icons';
 
-type Tab = 'limits' | 'daily' | 'folders';
+type Tab = 'dashboard' | 'accounts' | 'daily' | 'folders' | 'revenue';
 type Theme = 'light' | 'dark';
 
 function useTheme(): [Theme, () => void] {
@@ -31,7 +35,7 @@ function useTheme(): [Theme, () => void] {
 }
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('limits');
+  const [tab, setTab] = useState<Tab>('dashboard');
   const [theme, toggleTheme] = useTheme();
   const [status, setStatus] = useState<Status | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -108,7 +112,15 @@ export default function App() {
   }
 
   const pageTitle =
-    tab === 'limits' ? 'Limites' : tab === 'daily' ? 'Gastos Diários' : 'Pastas';
+    tab === 'dashboard'
+      ? 'Dashboard'
+      : tab === 'accounts'
+        ? 'Limites'
+        : tab === 'daily'
+          ? 'Gastos Diários'
+          : tab === 'revenue'
+            ? 'Faturamento'
+            : 'Pastas';
 
   return (
     <div className="layout">
@@ -121,8 +133,15 @@ export default function App() {
         <div className="nav-section">Painel</div>
         <nav className="nav">
           <button
-            className={`nav-item ${tab === 'limits' ? 'active' : ''}`}
-            onClick={() => setTab('limits')}
+            className={`nav-item ${tab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setTab('dashboard')}
+          >
+            <IconGrid />
+            Dashboard
+          </button>
+          <button
+            className={`nav-item ${tab === 'accounts' ? 'active' : ''}`}
+            onClick={() => setTab('accounts')}
           >
             <IconGauge />
             Limites
@@ -133,6 +152,13 @@ export default function App() {
           >
             <IconChart />
             Gastos Diários
+          </button>
+          <button
+            className={`nav-item ${tab === 'revenue' ? 'active' : ''}`}
+            onClick={() => setTab('revenue')}
+          >
+            <IconMoney />
+            Faturamento
           </button>
           <button
             className={`nav-item ${tab === 'folders' ? 'active' : ''}`}
@@ -174,8 +200,10 @@ export default function App() {
 
         <TokenBanner />
 
-        {tab === 'limits' && <LimitsPage reloadKey={reloadKey} />}
+        {tab === 'dashboard' && <DashboardPage reloadKey={reloadKey} />}
+        {tab === 'accounts' && <LimitsPage reloadKey={reloadKey} />}
         {tab === 'daily' && <DailySpendPage reloadKey={reloadKey} />}
+        {tab === 'revenue' && <RevenuePage reloadKey={reloadKey} />}
         {tab === 'folders' && <FoldersPage reloadKey={reloadKey} />}
       </main>
     </div>

@@ -6,7 +6,9 @@ import { existsSync } from 'node:fs';
 import { config, hasMetaConfig } from './config/index.js';
 import { initSchema, getState } from './db/index.js';
 import { api } from './routes/api.js';
+import { webhook } from './routes/webhook.js';
 import { collectAll } from './services/collector.js';
+import { backfillSales, salesApiEnabled } from './services/salesCollector.js';
 import { startScheduler } from './scheduler/index.js';
 import { authEnabled, isAuthenticated, requireAuth, handleLogin, handleLogout } from './auth.js';
 
@@ -36,6 +38,10 @@ app.get('/api/auth-status', (req, res) => {
   res.json({ authEnabled: authEnabled(), authenticated: isAuthenticated(req) });
 });
 
+// ---- Webhook da PerfectPay (PÚBLICO — validado por token no payload) ----
+// Montado ANTES do requireAuth para que a PerfectPay alcance sem login.
+app.use('/api/webhook', webhook);
+
 // ---- Rotas de dados (protegidas por login, quando habilitado) ----
 app.use('/api', requireAuth, api);
 
@@ -49,25 +55,41 @@ if (config.server.isProduction && existsSync(clientDist)) {
   });
 }
 
-initSchema();
+async function bootstrap(): Promise<void> {
+  // Cria as tabelas no Postgres antes de aceitar requisições.
+  await initSchema();
 
-app.listen(config.server.port, () => {
-  console.log(
-    `[TRACKTUDO] Backend rodando em http://localhost:${config.server.port} ` +
-      `(${config.server.nodeEnv})`,
-  );
-  if (!authEnabled()) {
-    console.warn('[TRACKTUDO] Aviso: login DESATIVADO (APP_PASSWORD vazio). Use só localmente.');
-  }
+  app.listen(config.server.port, () => {
+    console.log(
+      `[TRACKTUDO] Backend rodando em http://localhost:${config.server.port} ` +
+        `(${config.server.nodeEnv})`,
+    );
+    if (!authEnabled()) {
+      console.warn('[TRACKTUDO] Aviso: login DESATIVADO (APP_PASSWORD vazio). Use só localmente.');
+    }
+  });
+
   if (!hasMetaConfig()) {
     console.warn('[TRACKTUDO] Aviso: nenhum token da Meta configurado. Veja server/.env.');
     return;
   }
   startScheduler();
-  // Recoleta no boot se o banco está vazio (essencial em hosts que "dormem"
-  // e perdem o disco, como o Render free).
-  if (!getState('last_limits_collect')) {
+  // Recoleta no boot se o banco ainda não tem coleta de limites (útil na
+  // primeira subida ou após limpar o banco).
+  if (!(await getState('last_limits_collect'))) {
     console.log('[TRACKTUDO] Banco vazio: iniciando coleta inicial...');
     collectAll().catch((err) => console.error('[TRACKTUDO] Falha na coleta inicial:', err));
   }
+  // Backfill inicial de vendas (PerfectPay) se a API está ligada e nunca rodou.
+  if (salesApiEnabled() && !(await getState('last_sales_sync'))) {
+    console.log('[TRACKTUDO] Iniciando backfill inicial de vendas (PerfectPay)...');
+    backfillSales().catch((err) =>
+      console.error('[TRACKTUDO] Falha no backfill de vendas:', (err as Error).message),
+    );
+  }
+}
+
+bootstrap().catch((err) => {
+  console.error('[TRACKTUDO] Falha ao iniciar:', err);
+  process.exit(1);
 });
