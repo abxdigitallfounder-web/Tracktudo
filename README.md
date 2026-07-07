@@ -1,13 +1,19 @@
 # TRACKTUDO
 
 Dashboard local para monitorar **contas de anúncio da Meta** (Facebook/Instagram) sem abrir o
-Gerenciador de Negócios conta por conta. Uso **somente leitura** — o software nunca cria, edita
-ou pausa nada.
+Gerenciador de Negócios conta por conta. É majoritariamente **somente leitura**, com **uma única
+exceção**: a tela **Campanhas** permite **ativar/pausar campanhas** diretamente (ver seção
+[Ativar/pausar campanhas](#ativarpausar-campanhas-⚠️-única-ação-de-escrita)). Fora isso, o
+software nunca cria, edita ou apaga nada.
 
-Duas telas principais:
+Principais telas:
 
-1. **Limites** — limite de gastos (`spend_cap`), gasto acumulado (`amount_spent`), disponível e % usado.
-2. **Gastos Diários** — quanto cada conta gastou por dia.
+1. **Dashboard** — faturamento, ROI, lucro, vendas por pagamento/fonte/produto/país/horário.
+2. **Limites** — limite de gastos (`spend_cap`), gasto acumulado (`amount_spent`), disponível e % usado.
+3. **Gastos Diários** — quanto cada conta gastou por dia.
+4. **Campanhas** — orçamento/gasto/cliques (Meta) cruzados com vendas (PerfectPay) por campanha,
+   com opção de ativar/pausar.
+5. **Faturamento** — vendas da PerfectPay em tempo quase real.
 
 Os dados vêm da **Meta Marketing API (Graph API v25.0)**.
 
@@ -95,6 +101,25 @@ O frontend já encaminha as chamadas `/api` para o backend via proxy do Vite.
 - Todos os intervalos são configuráveis no `.env`.
 
 _(Detalhes de cada módulo são preenchidos nas próximas fases de desenvolvimento.)_
+
+---
+
+## Ativar/pausar campanhas (⚠️ única ação de escrita)
+
+A tela **Campanhas** tem um toggle que **ativa ou pausa a campanha de verdade na Meta** — a
+única ação do TRACKTUDO que muda algo fora do próprio app. Isso envolve **dinheiro real**: pausar
+a campanha errada pode custar vendas.
+
+- **Sem confirmação**: o clique já aplica a mudança na hora (decisão consciente — se preferir um
+  passo de confirmação, é uma mudança pequena no `CampaignsPage.tsx`).
+- **Requer `ads_management`** no token da Meta (não basta `ads_read`). Confira em
+  `GET https://graph.facebook.com/v25.0/me/permissions?access_token=SEU_TOKEN`.
+- **Histórico**: toda ativação/pausa feita pelo app fica registrada (botão "🕐 Histórico" na
+  tela) — quem/quando, não guarda "por quê".
+- Só é possível alternar entre **ACTIVE** e **PAUSED** (a Graph API não permite outros estados por
+  aqui). Campanhas arquivadas/excluídas não aparecem com o toggle utilizável.
+- Se a Meta recusar (ex.: sem método de pagamento, política, etc.), o app reverte o toggle
+  visualmente e mostra o erro da própria Meta.
 
 ---
 

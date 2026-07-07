@@ -99,4 +99,5 @@ export interface CampaignDailyInsight {
   spend: number;
   clicks: number;
   pageViews: number;
+  initiateCheckout: number;
 }

@@ -22,6 +22,9 @@ import {
   deleteFolder,
   setAccountFolder,
   setAccountsFolder,
+  getCampaignById,
+  updateCampaignStatusAndLog,
+  getCampaignStatusLog,
 } from '../db/index.js';
 import { accountStatusLabel } from '../meta/accountStatus.js';
 import { collectAll, isCollecting, today } from '../services/collector.js';
@@ -31,6 +34,7 @@ import {
   salesApiEnabled,
 } from '../services/salesCollector.js';
 import { runCampaignSyncBatch, isCollectingCampaigns } from '../services/campaignCollector.js';
+import { setCampaignStatus } from '../meta/client.js';
 import { getTokensInfo } from '../meta/tokenInfo.js';
 import { config } from '../config/index.js';
 
@@ -240,6 +244,7 @@ api.get('/campaigns', asyncHandler(async (req, res) => {
       // `pg` mantém como string (evita perda de precisão) — convertemos aqui.
       clicks: Number(r.clicks),
       pageViews: Number(r.page_views),
+      initiateCheckout: Number(r.initiate_checkout),
       sales: Number(r.vendas),
       pendingSales: Number(r.pendentes),
       revenue: Number(r.receita),
@@ -259,6 +264,43 @@ api.post('/campaigns/sync', asyncHandler(async (_req, res) => {
     console.error('[Campanhas] Erro na sincronização manual:', (err as Error).message),
   );
   res.status(202).json({ started: true });
+}));
+
+/**
+ * Ativa ou pausa uma campanha na Meta (única ação de escrita do TRACKTUDO).
+ * Body: { status: 'ACTIVE' | 'PAUSED' }. Aplica na Meta primeiro; só grava
+ * local + histórico se a Meta confirmar sucesso.
+ */
+api.put('/campaigns/:id/status', asyncHandler(async (req, res) => {
+  const { status } = req.body as { status?: unknown };
+  if (status !== 'ACTIVE' && status !== 'PAUSED') {
+    res.status(400).json({ error: 'status deve ser "ACTIVE" ou "PAUSED"' });
+    return;
+  }
+  const campaign = await getCampaignById(req.params.id);
+  if (!campaign) {
+    res.status(404).json({ error: 'Campanha não encontrada (sincronize antes de tentar de novo).' });
+    return;
+  }
+  if (campaign.status === status) {
+    res.json({ ok: true, status, unchanged: true });
+    return;
+  }
+  try {
+    await setCampaignStatus(campaign.id, status, campaign.account_id);
+  } catch (err) {
+    console.error(`[Campanhas] Falha ao alterar status de ${campaign.id}:`, (err as Error).message);
+    res.status(502).json({ error: (err as Error).message });
+    return;
+  }
+  await updateCampaignStatusAndLog(campaign.id, campaign.name, campaign.account_id, campaign.status, status);
+  res.json({ ok: true, status });
+}));
+
+/** Histórico recente de ativações/pausas feitas pelo TRACKTUDO. */
+api.get('/campaigns/status-log', asyncHandler(async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+  res.json(await getCampaignStatusLog(limit));
 }));
 
 // ---------- Faturamento (PerfectPay) ----------

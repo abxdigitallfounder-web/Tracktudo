@@ -4,8 +4,11 @@ import {
   apiSyncCampaigns,
   apiGetStatus,
   apiGetAccounts,
+  apiSetCampaignStatus,
+  apiGetCampaignStatusLog,
   type CampaignRow,
   type Account,
+  type CampaignStatusLogEntry,
 } from '../api';
 import { formatMoney, formatNumber } from '../format';
 import { AccountPickerModal } from '../components/AccountPickerModal';
@@ -34,16 +37,62 @@ function statusLabel(s: string): string {
   return STATUS_LABELS[s] ?? s;
 }
 
-function statusDotClass(s: string): string {
-  if (s === 'ACTIVE') return 'ok';
-  if (s === 'DISAPPROVED' || s === 'WITH_ISSUES') return 'danger';
-  return 'muted';
-}
-
 function ratio(numerator: number, denominator: number): number | null {
   if (!denominator) return null;
   return numerator / denominator;
 }
+
+/** Linha de campanha com as métricas derivadas já calculadas (custo por X, ROI). */
+interface RowMetrics extends CampaignRow {
+  budgetValue: number;
+  cpc: number | null;
+  cpv: number | null;
+  custoIC: number | null;
+  cpa: number | null;
+  roi: number | null;
+}
+
+function computeMetrics(r: CampaignRow): RowMetrics {
+  return {
+    ...r,
+    budgetValue: r.dailyBudget ?? r.lifetimeBudget ?? 0,
+    cpc: ratio(r.spend, r.clicks),
+    cpv: ratio(r.spend, r.pageViews),
+    custoIC: ratio(r.spend, r.initiateCheckout),
+    cpa: ratio(r.spend, r.sales),
+    roi: r.spend > 0 ? ((r.revenue - r.spend) / r.spend) * 100 : null,
+  };
+}
+
+type SortKey =
+  | 'name'
+  | 'budgetValue'
+  | 'spend'
+  | 'clicks'
+  | 'cpc'
+  | 'pageViews'
+  | 'cpv'
+  | 'initiateCheckout'
+  | 'custoIC'
+  | 'sales'
+  | 'cpa'
+  | 'pendingSales'
+  | 'roi';
+
+const COLUMNS: { key: SortKey; label: string; num?: boolean }[] = [
+  { key: 'budgetValue', label: 'Orçamento', num: true },
+  { key: 'spend', label: 'Gastos', num: true },
+  { key: 'clicks', label: 'Cliques', num: true },
+  { key: 'cpc', label: 'CPC', num: true },
+  { key: 'pageViews', label: 'Vis. de Pág.', num: true },
+  { key: 'cpv', label: 'CPV', num: true },
+  { key: 'initiateCheckout', label: 'IC', num: true },
+  { key: 'custoIC', label: 'Custo de IC', num: true },
+  { key: 'sales', label: 'Vendas', num: true },
+  { key: 'cpa', label: 'Custo/Venda', num: true },
+  { key: 'pendingSales', label: 'Vendas Pendentes', num: true },
+  { key: 'roi', label: 'ROI', num: true },
+];
 
 export function CampaignsPage({ reloadKey }: { reloadKey: number }) {
   const [rows, setRows] = useState<CampaignRow[]>([]);
@@ -53,6 +102,10 @@ export function CampaignsPage({ reloadKey }: { reloadKey: number }) {
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [toggleError, setToggleError] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<CampaignStatusLogEntry[]>([]);
 
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [search, setSearch] = useState('');
@@ -61,6 +114,8 @@ export function CampaignsPage({ reloadKey }: { reloadKey: number }) {
 
   const [since, setSince] = useState(() => ymd(new Date()));
   const [until, setUntil] = useState(() => ymd(new Date()));
+  const [sortKey, setSortKey] = useState<SortKey>('spend');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   // Contas carregam sempre (precisa delas pro seletor), campanhas só sob demanda.
   useEffect(() => {
@@ -132,6 +187,45 @@ export function CampaignsPage({ reloadKey }: { reloadKey: number }) {
     }
   }
 
+  async function handleToggleStatus(row: CampaignRow) {
+    const newStatus = row.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+    setTogglingId(row.id);
+    setToggleError(null);
+    // Otimista: já reflete na tela, reverte se a Meta recusar.
+    setRows((prev) =>
+      prev.map((r) => (r.id === row.id ? { ...r, status: newStatus, effectiveStatus: newStatus } : r)),
+    );
+    try {
+      const result = await apiSetCampaignStatus(row.id, newStatus);
+      if (!result.ok) {
+        setRows((prev) =>
+          prev.map((r) =>
+            r.id === row.id ? { ...r, status: row.status, effectiveStatus: row.effectiveStatus } : r,
+          ),
+        );
+        setToggleError(`"${row.name}": ${result.error ?? 'falha ao alterar status'}`);
+      }
+    } catch (err) {
+      setRows((prev) =>
+        prev.map((r) =>
+          r.id === row.id ? { ...r, status: row.status, effectiveStatus: row.effectiveStatus } : r,
+        ),
+      );
+      setToggleError(`"${row.name}": ${(err as Error).message}`);
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  async function openHistory() {
+    setHistoryOpen(true);
+    try {
+      setHistory(await apiGetCampaignStatusLog(50));
+    } catch {
+      setHistory([]);
+    }
+  }
+
   function setPreset(daysBack: number) {
     const u = new Date();
     const s = new Date();
@@ -158,6 +252,32 @@ export function CampaignsPage({ reloadKey }: { reloadKey: number }) {
     return [...set].sort();
   }, [rows]);
 
+  const rowsWithMetrics = useMemo(() => rows.map(computeMetrics), [rows]);
+
+  const sortedRows = useMemo(() => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...rowsWithMetrics].sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (typeof av === 'string' && typeof bv === 'string') {
+        return av.localeCompare(bv, 'pt-BR') * dir;
+      }
+      return ((av as number) - (bv as number)) * dir;
+    });
+  }, [rowsWithMetrics, sortKey, sortDir]);
+
+  function toggleSort(key: SortKey) {
+    if (key === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else {
+      setSortKey(key);
+      setSortDir('desc');
+    }
+  }
+  const arrow = (key: SortKey) => (key === sortKey ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
+
   const totals = useMemo(() => {
     const accountSet = new Set(rows.map((r) => r.accountId));
     return rows.reduce(
@@ -166,12 +286,23 @@ export function CampaignsPage({ reloadKey }: { reloadKey: number }) {
         spend: acc.spend + r.spend,
         clicks: acc.clicks + r.clicks,
         pageViews: acc.pageViews + r.pageViews,
+        initiateCheckout: acc.initiateCheckout + r.initiateCheckout,
         sales: acc.sales + r.sales,
         pendingSales: acc.pendingSales + r.pendingSales,
         revenue: acc.revenue + r.revenue,
         accounts: accountSet.size,
       }),
-      { budget: 0, spend: 0, clicks: 0, pageViews: 0, sales: 0, pendingSales: 0, revenue: 0, accounts: 0 },
+      {
+        budget: 0,
+        spend: 0,
+        clicks: 0,
+        pageViews: 0,
+        initiateCheckout: 0,
+        sales: 0,
+        pendingSales: 0,
+        revenue: 0,
+        accounts: 0,
+      },
     );
   }, [rows]);
 
@@ -202,7 +333,50 @@ export function CampaignsPage({ reloadKey }: { reloadKey: number }) {
         <button className="btn" onClick={handleSync} disabled={syncing}>
           {syncing ? 'Sincronizando…' : 'Sincronizar campanhas'}
         </button>
+        <button className="btn" onClick={openHistory}>
+          🕐 Histórico
+        </button>
       </div>
+
+      {toggleError && (
+        <div className="banner" style={{ borderColor: 'var(--danger)' }}>
+          ⚠️ Não foi possível alterar {toggleError}
+        </div>
+      )}
+
+      {historyOpen && (
+        <div className="modal-overlay" onClick={() => setHistoryOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3 style={{ margin: 0 }}>🕐 Histórico de ativações/pausas</h3>
+              <button className="icon-btn" onClick={() => setHistoryOpen(false)} title="Fechar">
+                ✕
+              </button>
+            </div>
+            <div className="modal-list">
+              {history.length === 0 && (
+                <div className="muted center">Nenhuma alteração registrada ainda.</div>
+              )}
+              {history.map((h) => (
+                <div key={h.id} className="check-row" style={{ cursor: 'default' }}>
+                  <span style={{ flex: 1 }}>
+                    <strong>{h.campaign_name}</strong>
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {statusLabel(h.old_status)} → {statusLabel(h.new_status)} ·{' '}
+                      {new Date(h.changed_at).toLocaleString('pt-BR')}
+                    </div>
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="modal-foot">
+              <button className="btn" onClick={() => setHistoryOpen(false)}>
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pickerOpen && (
         <AccountPickerModal
@@ -276,85 +450,102 @@ export function CampaignsPage({ reloadKey }: { reloadKey: number }) {
               <thead>
                 <tr>
                   <th className="no-sort">Status</th>
-                  <th className="no-sort">Campanha</th>
+                  <th className="no-sort" onClick={() => toggleSort('name')} style={{ cursor: 'pointer' }}>
+                    Campanha{arrow('name')}
+                  </th>
                   <th className="no-sort">Conta</th>
-                  <th className="num no-sort">Orçamento</th>
-                  <th className="num no-sort">Gastos</th>
-                  <th className="num no-sort">Vendas</th>
-                  <th className="num no-sort">Vendas Pendentes</th>
-                  <th className="num no-sort">Cliques</th>
-                  <th className="num no-sort">CPC</th>
-                  <th className="num no-sort">Vis. de Pág.</th>
-                  <th className="num no-sort">CPV</th>
-                  <th className="num no-sort">ROI</th>
+                  {COLUMNS.map((c) => (
+                    <th
+                      key={c.key}
+                      className={c.num ? 'num' : ''}
+                      onClick={() => toggleSort(c.key)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {c.label}
+                      {arrow(c.key)}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={12} className="empty">Carregando…</td>
+                    <td colSpan={15} className="empty">Carregando…</td>
                   </tr>
                 )}
-                {!loading && rows.length === 0 && (
+                {!loading && sortedRows.length === 0 && (
                   <tr>
-                    <td colSpan={12} className="empty">
+                    <td colSpan={15} className="empty">
                       Nenhuma campanha encontrada nessas contas/período. Clique em "Sincronizar
                       campanhas" para buscar da Meta.
                     </td>
                   </tr>
                 )}
                 {!loading &&
-                  rows.map((r) => {
-                    const cpc = ratio(r.spend, r.clicks);
-                    const cpv = ratio(r.spend, r.pageViews);
-                    const roi = r.spend > 0 ? ((r.revenue - r.spend) / r.spend) * 100 : null;
-                    return (
-                      <tr key={r.id}>
-                        <td>
-                          <span className={`dot ${statusDotClass(r.effectiveStatus)}`} />{' '}
-                          <span className="muted" style={{ fontSize: 12 }}>{statusLabel(r.effectiveStatus)}</span>
-                        </td>
-                        <td>{r.name}</td>
-                        <td>
-                          {r.accountName}
+                  sortedRows.map((r) => (
+                    <tr key={r.id}>
+                      <td>
+                        <label className="toggle-switch" title={statusLabel(r.effectiveStatus)}>
+                          <input
+                            type="checkbox"
+                            checked={r.status === 'ACTIVE'}
+                            disabled={togglingId === r.id}
+                            onChange={() => handleToggleStatus(r)}
+                          />
+                          <span className="slider" />
+                        </label>
+                        {r.effectiveStatus !== r.status && (
                           <div className="muted" style={{ fontSize: 11 }}>
-                            <span className="badge muted">{r.accountStatusLabel}</span>
+                            {statusLabel(r.effectiveStatus)}
                           </div>
-                        </td>
-                        <td className="num">
-                          {r.dailyBudget != null
-                            ? `${formatMoney(r.dailyBudget, r.currency)}/dia`
-                            : r.lifetimeBudget != null
-                              ? `${formatMoney(r.lifetimeBudget, r.currency)} (vitalício)`
-                              : <span className="muted">N/A</span>}
-                        </td>
-                        <td className="num">{formatMoney(r.spend, r.currency)}</td>
-                        <td className="num">{r.sales}</td>
-                        <td className="num">{r.pendingSales}</td>
-                        <td className="num">{formatNumber(r.clicks, 0)}</td>
-                        <td className="num">{cpc != null ? formatMoney(cpc, r.currency) : <span className="muted">N/A</span>}</td>
-                        <td className="num">{formatNumber(r.pageViews, 0)}</td>
-                        <td className="num">{cpv != null ? formatMoney(cpv, r.currency) : <span className="muted">N/A</span>}</td>
-                        <td className={`num ${roi != null ? (roi >= 0 ? 'pos-text' : 'neg-text') : ''}`}>
-                          {roi != null ? `${roi.toFixed(1)}%` : <span className="muted">N/A</span>}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                        )}
+                      </td>
+                      <td>{r.name}</td>
+                      <td>
+                        {r.accountName}
+                        <div className="muted" style={{ fontSize: 11 }}>
+                          <span className="badge muted">{r.accountStatusLabel}</span>
+                        </div>
+                      </td>
+                      <td className="num">
+                        {r.dailyBudget != null
+                          ? `${formatMoney(r.dailyBudget, r.currency)}/dia`
+                          : r.lifetimeBudget != null
+                            ? `${formatMoney(r.lifetimeBudget, r.currency)} (vitalício)`
+                            : <span className="muted">N/A</span>}
+                      </td>
+                      <td className="num">{formatMoney(r.spend, r.currency)}</td>
+                      <td className="num">{formatNumber(r.clicks, 0)}</td>
+                      <td className="num">{r.cpc != null ? formatMoney(r.cpc, r.currency) : <span className="muted">N/A</span>}</td>
+                      <td className="num">{formatNumber(r.pageViews, 0)}</td>
+                      <td className="num">{r.cpv != null ? formatMoney(r.cpv, r.currency) : <span className="muted">N/A</span>}</td>
+                      <td className="num">{formatNumber(r.initiateCheckout, 0)}</td>
+                      <td className="num">{r.custoIC != null ? formatMoney(r.custoIC, r.currency) : <span className="muted">N/A</span>}</td>
+                      <td className="num">{r.sales}</td>
+                      <td className="num">{r.cpa != null ? formatMoney(r.cpa, r.currency) : <span className="muted">N/A</span>}</td>
+                      <td className="num">{r.pendingSales}</td>
+                      <td className={`num ${r.roi != null ? (r.roi >= 0 ? 'pos-text' : 'neg-text') : ''}`}>
+                        {r.roi != null ? `${r.roi.toFixed(1)}%` : <span className="muted">N/A</span>}
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
-              {!loading && rows.length > 0 && (
+              {!loading && sortedRows.length > 0 && (
                 <tfoot>
                   <tr className="total-row">
-                    <td colSpan={2}>{rows.length} CAMPANHAS</td>
+                    <td colSpan={2}>{sortedRows.length} CAMPANHAS</td>
                     <td>{totals.accounts} CONTA(S)</td>
                     <td className="num">{formatMoney(totals.budget, mainCurrency)}</td>
                     <td className="num">{formatMoney(totals.spend, mainCurrency)}</td>
-                    <td className="num">{totals.sales}</td>
-                    <td className="num">{totals.pendingSales}</td>
                     <td className="num">{formatNumber(totals.clicks, 0)}</td>
                     <td className="num">—</td>
                     <td className="num">{formatNumber(totals.pageViews, 0)}</td>
                     <td className="num">—</td>
+                    <td className="num">{formatNumber(totals.initiateCheckout, 0)}</td>
+                    <td className="num">—</td>
+                    <td className="num">{totals.sales}</td>
+                    <td className="num">—</td>
+                    <td className="num">{totals.pendingSales}</td>
                     <td className="num">{formatMoney(totals.revenue, mainCurrency)} receita</td>
                   </tr>
                 </tfoot>

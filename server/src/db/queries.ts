@@ -458,6 +458,7 @@ export interface CampaignRow {
   spend: number;
   clicks: number;
   page_views: number;
+  initiate_checkout: number;
   vendas: number;
   receita: number;
   pendentes: number;
@@ -484,7 +485,8 @@ export async function getCampaignsTable(filter: CampaignsFilter): Promise<Campai
        SELECT campaign_id,
               SUM(spend) AS spend,
               SUM(clicks) AS clicks,
-              SUM(page_views) AS page_views
+              SUM(page_views) AS page_views,
+              SUM(initiate_checkout) AS initiate_checkout
        FROM campaign_daily_insights
        WHERE date BETWEEN $1 AND $2
        GROUP BY campaign_id
@@ -505,6 +507,7 @@ export async function getCampaignsTable(filter: CampaignsFilter): Promise<Campai
             COALESCE(i.spend, 0) AS spend,
             COALESCE(i.clicks, 0) AS clicks,
             COALESCE(i.page_views, 0) AS page_views,
+            COALESCE(i.initiate_checkout, 0) AS initiate_checkout,
             COALESCE(s.vendas, 0) AS vendas,
             COALESCE(s.receita, 0) AS receita,
             COALESCE(s.pendentes, 0) AS pendentes,

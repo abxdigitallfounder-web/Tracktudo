@@ -132,6 +132,60 @@ async function graphGet<T>(
   }
 }
 
+/**
+ * Faz uma requisição POST à Graph API (mutação — ex.: mudar status de campanha).
+ * Mesma lógica de cota/retry do graphGet, mas envia os campos no corpo
+ * (application/x-www-form-urlencoded, como a Graph API espera para escrita).
+ */
+async function graphPost<T>(
+  path: string,
+  fields: Record<string, string>,
+  contextLabel: string,
+  token: string,
+): Promise<RequestResult<T>> {
+  const url = `${config.meta.baseUrl}/${path.replace(/^\//, '')}`;
+  const body = new URLSearchParams({ ...fields, access_token: token });
+
+  let attempt = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const res = await fetch(url, { method: 'POST', body });
+    const usage = parseUsage(res.headers.get('x-business-use-case-usage'));
+
+    let respBody: unknown;
+    try {
+      respBody = await res.json();
+    } catch {
+      respBody = null;
+    }
+
+    const err = (respBody as { error?: { code: number; message: string; error_subcode?: number } })
+      ?.error;
+
+    if (res.ok && !err) {
+      return { body: respBody as T, usage };
+    }
+
+    if (err && THROTTLE_CODES.has(err.code) && attempt < MAX_RETRIES) {
+      attempt += 1;
+      const fromHeader = usage?.estimatedTimeToRegainAccess ?? 0;
+      const exponential = Math.min(60, 2 ** attempt);
+      const waitSec = Math.max(fromHeader, exponential);
+      console.warn(
+        `[Meta] Throttle (código ${err.code}) em ${contextLabel}. ` +
+          `Tentativa ${attempt}/${MAX_RETRIES}, aguardando ${waitSec}s.`,
+      );
+      await sleep(waitSec * 1000);
+      continue;
+    }
+
+    const msg = err
+      ? `código ${err.code}${err.error_subcode ? `/${err.error_subcode}` : ''}: ${err.message}`
+      : `HTTP ${res.status} ${res.statusText}`;
+    throw new Error(`[Meta] Falha em ${contextLabel} -> ${msg}`);
+  }
+}
+
 /** Normaliza uma conta crua da API para o formato interno. */
 function normalizeAccount(raw: RawAdAccount): AdAccount {
   const spendCap = centsToUnit(raw.spend_cap);
@@ -343,12 +397,28 @@ export async function getCampaigns(accountId: string, token?: string): Promise<C
   return result;
 }
 
-/** Extrai o valor de landing_page_view do array `actions` do insight. */
-function extractPageViews(actions: RawCampaignInsight['actions']): number {
+/**
+ * Extrai um valor do array `actions` do insight, tentando cada action_type da
+ * lista em ordem até achar um presente (a Meta varia o nome conforme o tipo
+ * de pixel/conversão configurado na campanha — ex.: "initiate_checkout" no
+ * padrão novo, "omni_initiated_checkout" quando agrega web+app).
+ */
+function extractAction(actions: RawCampaignInsight['actions'], candidates: string[]): number {
   if (!actions) return 0;
-  const hit = actions.find((a) => a.action_type === 'landing_page_view');
-  return hit ? Number(hit.value) || 0 : 0;
+  for (const type of candidates) {
+    const hit = actions.find((a) => a.action_type === type);
+    if (hit) return Number(hit.value) || 0;
+  }
+  return 0;
 }
+
+const PAGE_VIEW_TYPES = ['landing_page_view', 'omni_landing_page_view', 'view_content', 'omni_view_content'];
+const INITIATE_CHECKOUT_TYPES = [
+  'initiate_checkout',
+  'omni_initiated_checkout',
+  'offsite_conversion.fb_pixel_initiate_checkout',
+  'onsite_web_initiate_checkout',
+];
 
 /**
  * Insights diários por campanha (gasto, cliques, visualizações de página) de
@@ -390,7 +460,8 @@ export async function getCampaignDailyInsights(
         date: row.date_start,
         spend: spendToUnit(row.spend),
         clicks: Number(row.clicks) || 0,
-        pageViews: extractPageViews(row.actions),
+        pageViews: extractAction(row.actions, PAGE_VIEW_TYPES),
+        initiateCheckout: extractAction(row.actions, INITIATE_CHECKOUT_TYPES),
       });
     }
 
@@ -399,4 +470,24 @@ export async function getCampaignDailyInsights(
   } while (after);
 
   return result;
+}
+
+/**
+ * Ativa ou pausa uma campanha na Meta. Único write suportado pelo TRACKTUDO —
+ * a Graph API só aceita "ACTIVE" ou "PAUSED" via este endpoint (ARCHIVED/DELETED
+ * exigem outra operação e não são expostos aqui).
+ */
+export async function setCampaignStatus(
+  campaignId: string,
+  status: 'ACTIVE' | 'PAUSED',
+  accountId: string,
+  token?: string,
+): Promise<void> {
+  const useToken = token ?? getTokenForAccount(accountId);
+  await graphPost<{ success?: boolean }>(
+    campaignId,
+    { status },
+    `alterar status de ${campaignId} para ${status}`,
+    useToken,
+  );
 }

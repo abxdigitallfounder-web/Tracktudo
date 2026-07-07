@@ -222,6 +222,7 @@ export interface CampaignRow {
   spend: number;
   clicks: number;
   pageViews: number;
+  initiateCheckout: number;
   sales: number;
   pendingSales: number;
   revenue: number;
@@ -256,3 +257,37 @@ export async function apiSyncCampaigns(): Promise<{ started: boolean; message?: 
   const res = await fetch('/api/campaigns/sync', { method: 'POST' });
   return res.json();
 }
+
+export interface SetCampaignStatusResult {
+  ok: boolean;
+  status?: string;
+  unchanged?: boolean;
+  error?: string;
+}
+
+export async function apiSetCampaignStatus(
+  id: string,
+  status: 'ACTIVE' | 'PAUSED',
+): Promise<SetCampaignStatusResult> {
+  const res = await fetch(`/api/campaigns/${id}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  const json = (await res.json()) as SetCampaignStatusResult;
+  if (!res.ok) return { ok: false, error: json.error ?? `Erro ${res.status}` };
+  return json;
+}
+
+export interface CampaignStatusLogEntry {
+  id: number;
+  campaign_id: string;
+  campaign_name: string;
+  account_id: string;
+  old_status: string;
+  new_status: string;
+  changed_at: string;
+}
+
+export const apiGetCampaignStatusLog = (limit = 50) =>
+  get<CampaignStatusLogEntry[]>(`/api/campaigns/status-log?limit=${limit}`);
