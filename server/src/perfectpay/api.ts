@@ -105,16 +105,31 @@ async function fetchPage(filter: SalesFilter, page: number): Promise<SalesPage> 
 /**
  * Busca TODAS as vendas do filtro, seguindo a paginação. Retorna a lista já
  * normalizada. `onProgress` é chamado a cada página (para log).
+ *
+ * `maxDurationMs` interrompe a paginação se o tempo for excedido (essencial em
+ * hosts serverless com limite de execução) — o que faltar é buscado na
+ * próxima chamada, já que os filtros de data são idempotentes (upsert).
  */
 export async function fetchAllSales(
   filter: SalesFilter,
   onProgress?: (page: number, totalPages: number, count: number) => void,
-): Promise<SaleInput[]> {
+  maxDurationMs = Infinity, // sem limite por padrão (hosts tradicionais); cron routes passam um valor
+): Promise<{ sales: SaleInput[]; complete: boolean }> {
   const out: SaleInput[] = [];
+  const startedAt = Date.now();
   let page = 1;
   let totalPages = 1;
+  let complete = true;
 
   do {
+    if (Date.now() - startedAt > maxDurationMs) {
+      complete = false;
+      console.warn(
+        `[PerfectPay API] Orçamento de tempo excedido na página ${page}/${totalPages} — ` +
+          'continuará na próxima sincronização.',
+      );
+      break;
+    }
     const sales = await fetchPage(filter, page);
     totalPages = sales.total_pages || 1;
     for (const raw of sales.data) {
@@ -126,5 +141,5 @@ export async function fetchAllSales(
     if (page <= totalPages) await sleep(300); // respeita o rate limit da API
   } while (page <= totalPages);
 
-  return out;
+  return { sales: out, complete };
 }

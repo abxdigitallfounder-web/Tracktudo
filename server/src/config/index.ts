@@ -117,6 +117,12 @@ export const config = {
     backfillDays: num('BACKFILL_DAYS', 30),
     /** Sincronização incremental de vendas (padrão: a cada hora). */
     salesSync: process.env.CRON_SALES_SYNC?.trim() || '15 * * * *',
+    /**
+     * Segredo compartilhado para os endpoints /api/cron/* (usados por um cron
+     * externo em hosts serverless, como a Vercel, no lugar do node-cron interno).
+     * Sem isso, esses endpoints ficariam públicos e qualquer um poderia acioná-los.
+     */
+    secret: process.env.CRON_SECRET?.trim() || '',
   },
   rateLimit: {
     requestDelayMs: num('REQUEST_DELAY_MS', 250),
