@@ -1,6 +1,5 @@
 import { config, hasMetaConfig } from './config/index.js';
 import { app, ensureSchema } from './app.js';
-import { authEnabled } from './auth.js';
 import { getState } from './db/index.js';
 import { collectAll } from './services/collector.js';
 import { backfillSales, salesApiEnabled } from './services/salesCollector.js';
@@ -20,9 +19,6 @@ async function bootstrap(): Promise<void> {
       `[TRACKTUDO] Backend rodando em http://localhost:${config.server.port} ` +
         `(${config.server.nodeEnv})`,
     );
-    if (!authEnabled()) {
-      console.warn('[TRACKTUDO] Aviso: login DESATIVADO (APP_PASSWORD vazio). Use só localmente.');
-    }
   });
 
   if (!hasMetaConfig()) {

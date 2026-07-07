@@ -151,27 +151,6 @@ export async function apiRefresh(): Promise<{ started: boolean; message?: string
   return res.json();
 }
 
-// ---- Autenticação ----
-export interface AuthStatus {
-  authEnabled: boolean;
-  authenticated: boolean;
-}
-
-export const apiAuthStatus = () => get<AuthStatus>('/api/auth-status');
-
-export async function apiLogin(password: string): Promise<{ ok: boolean; error?: string }> {
-  const res = await fetch('/api/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password }),
-  });
-  return res.json();
-}
-
-export async function apiLogout(): Promise<void> {
-  await fetch('/api/logout', { method: 'POST' });
-}
-
 export async function apiSetAccountTags(id: string, tags: string[]): Promise<string[]> {
   const res = await fetch(`/api/accounts/${id}/tags`, {
     method: 'PUT',
