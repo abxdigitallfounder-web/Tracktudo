@@ -9,6 +9,8 @@ import {
   getRevenueRange,
   getRecentSales,
   getDashboardData,
+  getCampaignsTable,
+  getUntrackedSalesCount,
 } from '../db/queries.js';
 import { saleStatusLabel, paymentTypeLabel } from '../perfectpay/status.js';
 import {
@@ -28,6 +30,7 @@ import {
   isSyncingSales,
   salesApiEnabled,
 } from '../services/salesCollector.js';
+import { runCampaignSyncBatch, isCollectingCampaigns } from '../services/campaignCollector.js';
 import { getTokensInfo } from '../meta/tokenInfo.js';
 import { config } from '../config/index.js';
 
@@ -98,10 +101,11 @@ api.get('/summary', asyncHandler(async (_req, res) => {
 
 /** Estado das coletas (para "Atualizado há X min" e monitor de token). */
 api.get('/status', asyncHandler(async (_req, res) => {
-  const [lastLimitsCollect, lastDailyCollect, lastSalesSync] = await Promise.all([
+  const [lastLimitsCollect, lastDailyCollect, lastSalesSync, lastCampaignSync] = await Promise.all([
     getState('last_limits_collect'),
     getState('last_daily_collect'),
     getState('last_sales_sync'),
+    getState('last_campaign_sync'),
   ]);
   res.json({
     collecting: isCollecting(),
@@ -111,6 +115,8 @@ api.get('/status', asyncHandler(async (_req, res) => {
     salesApiEnabled: salesApiEnabled(),
     salesSyncing: isSyncingSales(),
     lastSalesSync,
+    campaignsSyncing: isCollectingCampaigns(),
+    lastCampaignSync,
   });
 }));
 
@@ -194,6 +200,65 @@ api.put('/accounts/:id/folder', asyncHandler(async (req, res) => {
 api.get('/dashboard', asyncHandler(async (req, res) => {
   const { since, until } = parseRange(req.query);
   res.json(await getDashboardData(since, until));
+}));
+
+// ---------- Campanhas (Meta + PerfectPay cruzadas) ----------
+
+/** Tabela de campanhas: orçamento/gasto/cliques (Meta) + vendas (PerfectPay). */
+api.get('/campaigns', asyncHandler(async (req, res) => {
+  const { since, until } = parseRange(req.query);
+  const q = req.query as Record<string, string | undefined>;
+  const accountIds = q.accountIds
+    ? q.accountIds.split(',').map((s) => s.trim()).filter(Boolean)
+    : [];
+  const [rows, untrackedSales] = await Promise.all([
+    getCampaignsTable({
+      since,
+      until,
+      search: q.search,
+      status: q.status,
+      accountIds,
+      product: q.product,
+    }),
+    getUntrackedSalesCount(since, until),
+  ]);
+  res.json({
+    rows: rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      accountId: r.account_id,
+      accountName: r.account_name,
+      accountStatus: r.account_status,
+      accountStatusLabel: accountStatusLabel(r.account_status),
+      currency: r.currency,
+      status: r.status,
+      effectiveStatus: r.effective_status,
+      dailyBudget: r.daily_budget,
+      lifetimeBudget: r.lifetime_budget,
+      spend: Number(r.spend),
+      // COUNT/SUM de coluna inteira retornam bigint no Postgres, que o driver
+      // `pg` mantém como string (evita perda de precisão) — convertemos aqui.
+      clicks: Number(r.clicks),
+      pageViews: Number(r.page_views),
+      sales: Number(r.vendas),
+      pendingSales: Number(r.pendentes),
+      revenue: Number(r.receita),
+      product: r.produto,
+    })),
+    untrackedSales,
+  });
+}));
+
+/** Dispara a sincronização (em lote) de campanhas via API da Meta. */
+api.post('/campaigns/sync', asyncHandler(async (_req, res) => {
+  if (isCollectingCampaigns()) {
+    res.status(409).json({ started: false, message: 'Sincronização já em andamento.' });
+    return;
+  }
+  runCampaignSyncBatch().catch((err) =>
+    console.error('[Campanhas] Erro na sincronização manual:', (err as Error).message),
+  );
+  res.status(202).json({ started: true });
 }));
 
 // ---------- Faturamento (PerfectPay) ----------

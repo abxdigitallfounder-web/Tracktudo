@@ -4,6 +4,7 @@ import { timeAgo } from './format';
 import { DashboardPage } from './pages/DashboardPage';
 import { LimitsPage } from './pages/LimitsPage';
 import { DailySpendPage } from './pages/DailySpendPage';
+import { CampaignsPage } from './pages/CampaignsPage';
 import { FoldersPage } from './pages/FoldersPage';
 import { RevenuePage } from './pages/RevenuePage';
 import { TokenBanner } from './components/TokenBanner';
@@ -11,6 +12,7 @@ import {
   IconGrid,
   IconGauge,
   IconChart,
+  IconTarget,
   IconFolder,
   IconMoney,
   IconRefresh,
@@ -18,7 +20,7 @@ import {
   IconMoon,
 } from './components/icons';
 
-type Tab = 'dashboard' | 'accounts' | 'daily' | 'folders' | 'revenue';
+type Tab = 'dashboard' | 'accounts' | 'daily' | 'campaigns' | 'folders' | 'revenue';
 type Theme = 'light' | 'dark';
 
 function useTheme(): [Theme, () => void] {
@@ -88,9 +90,11 @@ export default function App() {
         ? 'Limites'
         : tab === 'daily'
           ? 'Gastos Diários'
-          : tab === 'revenue'
-            ? 'Faturamento'
-            : 'Pastas';
+          : tab === 'campaigns'
+            ? 'Campanhas'
+            : tab === 'revenue'
+              ? 'Faturamento'
+              : 'Pastas';
 
   return (
     <div className="layout">
@@ -122,6 +126,13 @@ export default function App() {
           >
             <IconChart />
             Gastos Diários
+          </button>
+          <button
+            className={`nav-item ${tab === 'campaigns' ? 'active' : ''}`}
+            onClick={() => setTab('campaigns')}
+          >
+            <IconTarget />
+            Campanhas
           </button>
           <button
             className={`nav-item ${tab === 'revenue' ? 'active' : ''}`}
@@ -169,6 +180,7 @@ export default function App() {
         {tab === 'dashboard' && <DashboardPage reloadKey={reloadKey} />}
         {tab === 'accounts' && <LimitsPage reloadKey={reloadKey} />}
         {tab === 'daily' && <DailySpendPage reloadKey={reloadKey} />}
+        {tab === 'campaigns' && <CampaignsPage reloadKey={reloadKey} />}
         {tab === 'revenue' && <RevenuePage reloadKey={reloadKey} />}
         {tab === 'folders' && <FoldersPage reloadKey={reloadKey} />}
       </main>

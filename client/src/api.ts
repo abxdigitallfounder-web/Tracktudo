@@ -49,6 +49,8 @@ export interface Status {
   salesApiEnabled?: boolean;
   salesSyncing?: boolean;
   lastSalesSync?: string | null;
+  campaignsSyncing?: boolean;
+  lastCampaignSync?: string | null;
 }
 
 async function get<T>(url: string): Promise<T> {
@@ -202,4 +204,55 @@ export async function apiSetAccountFolder(id: string, folderId: number | null): 
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ folderId }),
   });
+}
+
+// ---- Campanhas (Meta + PerfectPay cruzadas) ----
+export interface CampaignRow {
+  id: string;
+  name: string;
+  accountId: string;
+  accountName: string;
+  accountStatus: number;
+  accountStatusLabel: string;
+  currency: string;
+  status: string;
+  effectiveStatus: string;
+  dailyBudget: number | null;
+  lifetimeBudget: number | null;
+  spend: number;
+  clicks: number;
+  pageViews: number;
+  sales: number;
+  pendingSales: number;
+  revenue: number;
+  product: string | null;
+}
+
+export interface CampaignsResponse {
+  rows: CampaignRow[];
+  untrackedSales: number;
+}
+
+export interface CampaignsFilter {
+  since: string;
+  until: string;
+  search?: string;
+  status?: string;
+  accountIds: string[];
+  product?: string;
+}
+
+export async function apiGetCampaigns(f: CampaignsFilter): Promise<CampaignsResponse> {
+  if (f.accountIds.length === 0) return { rows: [], untrackedSales: 0 };
+  const params = new URLSearchParams({ since: f.since, until: f.until });
+  if (f.search) params.set('search', f.search);
+  if (f.status) params.set('status', f.status);
+  params.set('accountIds', f.accountIds.join(','));
+  if (f.product) params.set('product', f.product);
+  return get<CampaignsResponse>(`/api/campaigns?${params.toString()}`);
+}
+
+export async function apiSyncCampaigns(): Promise<{ started: boolean; message?: string }> {
+  const res = await fetch('/api/campaigns/sync', { method: 'POST' });
+  return res.json();
 }

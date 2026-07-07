@@ -61,3 +61,42 @@ export interface DailySpend {
   date: string; // YYYY-MM-DD
   spend: number;
 }
+
+/** Campanha crua como vem em /{act_id}/campaigns. */
+export interface RawCampaign {
+  id: string;
+  name: string;
+  status?: string; // ACTIVE, PAUSED, etc. (status configurado pelo usuário)
+  effective_status?: string; // status real (considera conta/orçamento pausados)
+  daily_budget?: string; // em centavos
+  lifetime_budget?: string; // em centavos
+}
+
+/** Campanha normalizada (valores em unidade normal da moeda). */
+export interface Campaign {
+  id: string;
+  accountId: string;
+  name: string;
+  status: string;
+  effectiveStatus: string;
+  dailyBudget: number | null;
+  lifetimeBudget: number | null;
+}
+
+/** Uma linha de insights diários por campanha (level=campaign, time_increment=1). */
+export interface RawCampaignInsight {
+  campaign_id?: string;
+  spend?: string;
+  clicks?: string;
+  date_start?: string;
+  actions?: Array<{ action_type: string; value: string }>;
+}
+
+/** Insight diário de campanha, já normalizado. */
+export interface CampaignDailyInsight {
+  campaignId: string;
+  date: string; // YYYY-MM-DD
+  spend: number;
+  clicks: number;
+  pageViews: number;
+}

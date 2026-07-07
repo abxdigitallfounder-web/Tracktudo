@@ -25,6 +25,7 @@ interface RawApiSale {
   date_created?: string;
   date_approved?: string;
   customer?: Array<{ full_name?: string; email?: string }> | { full_name?: string; email?: string };
+  metadata?: { utm_campaign?: string };
 }
 
 interface SalesPage {
@@ -67,6 +68,7 @@ export function normalizeApiSale(raw: RawApiSale): SaleInput | null {
     customerEmail: customer?.email ?? null,
     dateCreated: emptyToNull(raw.date_created),
     dateApproved: emptyToNull(raw.date_approved),
+    utmCampaign: emptyToNull(raw.metadata?.utm_campaign),
     raw: JSON.stringify(raw),
   };
 }

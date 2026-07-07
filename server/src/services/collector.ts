@@ -18,7 +18,7 @@ export function today(): string {
   return ymd(new Date());
 }
 
-function daysAgo(n: number): string {
+export function daysAgo(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);
   return ymd(d);

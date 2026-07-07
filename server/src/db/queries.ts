@@ -441,3 +441,106 @@ export async function getRecentSales(limit: number): Promise<SaleRow[]> {
   );
   return rows;
 }
+
+// ---------- Campanhas (Meta + PerfectPay cruzadas) ----------
+
+export interface CampaignRow {
+  id: string;
+  name: string;
+  account_id: string;
+  account_name: string;
+  account_status: number;
+  currency: string;
+  status: string;
+  effective_status: string;
+  daily_budget: number | null;
+  lifetime_budget: number | null;
+  spend: number;
+  clicks: number;
+  page_views: number;
+  vendas: number;
+  receita: number;
+  pendentes: number;
+  produto: string | null;
+}
+
+export interface CampaignsFilter {
+  since: string;
+  until: string;
+  search?: string;
+  status?: string;
+  /** IDs de conta ("act_...") a incluir. Vazio/ausente = nenhuma conta (retorna []). */
+  accountIds?: string[];
+  product?: string;
+}
+
+export async function getCampaignsTable(filter: CampaignsFilter): Promise<CampaignRow[]> {
+  // Sem contas selecionadas, não há o que buscar — evita varrer milhares de
+  // campanhas de todas as contas sem necessidade (a tela exige seleção).
+  if (!filter.accountIds || filter.accountIds.length === 0) return [];
+
+  const { rows } = await pool.query<CampaignRow>(
+    `WITH insights AS (
+       SELECT campaign_id,
+              SUM(spend) AS spend,
+              SUM(clicks) AS clicks,
+              SUM(page_views) AS page_views
+       FROM campaign_daily_insights
+       WHERE date BETWEEN $1 AND $2
+       GROUP BY campaign_id
+     ),
+     sales_agg AS (
+       SELECT utm_campaign AS campaign_id,
+              COUNT(*) FILTER (WHERE status = ANY($3)) AS vendas,
+              COALESCE(SUM(sale_amount) FILTER (WHERE status = ANY($3)), 0) AS receita,
+              COUNT(*) FILTER (WHERE status = 1) AS pendentes,
+              MODE() WITHIN GROUP (ORDER BY product_name) AS produto
+       FROM sales
+       WHERE utm_campaign IS NOT NULL
+         AND LEFT(COALESCE(date_approved, date_created), 10) BETWEEN $1 AND $2
+       GROUP BY utm_campaign
+     )
+     SELECT c.id, c.name, c.account_id, a.name AS account_name, a.status AS account_status,
+            a.currency, c.status, c.effective_status, c.daily_budget, c.lifetime_budget,
+            COALESCE(i.spend, 0) AS spend,
+            COALESCE(i.clicks, 0) AS clicks,
+            COALESCE(i.page_views, 0) AS page_views,
+            COALESCE(s.vendas, 0) AS vendas,
+            COALESCE(s.receita, 0) AS receita,
+            COALESCE(s.pendentes, 0) AS pendentes,
+            s.produto
+     FROM campaigns c
+     JOIN accounts a ON a.id = c.account_id
+     LEFT JOIN insights i ON i.campaign_id = c.id
+     LEFT JOIN sales_agg s ON s.campaign_id = c.id
+     WHERE c.account_id = ANY($6::text[])
+       AND ($4 = '' OR c.name ILIKE '%' || $4 || '%')
+       AND ($5 = '' OR c.effective_status = $5)
+       AND ($7 = '' OR s.produto = $7)
+     ORDER BY spend DESC, c.name ASC`,
+    [
+      filter.since,
+      filter.until,
+      APPROVED_STATUSES,
+      filter.search?.trim() ?? '',
+      filter.status?.trim() ?? '',
+      filter.accountIds.map((id) => (id.startsWith('act_') ? id : `act_${id}`)),
+      filter.product?.trim() ?? '',
+    ],
+  );
+  return rows;
+}
+
+/** Vendas do período cujo utm_campaign não bate com nenhuma campanha conhecida. */
+export async function getUntrackedSalesCount(since: string, until: string): Promise<number> {
+  const { rows } = await pool.query<{ n: string }>(
+    `SELECT COUNT(*) AS n
+     FROM sales s
+     WHERE LEFT(COALESCE(s.date_approved, s.date_created), 10) BETWEEN $1 AND $2
+       AND (s.utm_campaign IS NULL OR NOT EXISTS (
+         SELECT 1 FROM campaigns c WHERE c.id = s.utm_campaign
+       ))`,
+    [since, until],
+  );
+  return Number(rows[0]?.n ?? 0);
+}

@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import { config } from '../config/index.js';
 import { collectLimitsJob, runDailySpendBatch } from '../services/collector.js';
 import { syncRecentSales, salesApiEnabled } from '../services/salesCollector.js';
+import { runCampaignSyncBatch } from '../services/campaignCollector.js';
 
 /**
  * Endpoints PÚBLICOS (validados por CRON_SECRET) acionados por um cron
@@ -77,6 +78,18 @@ cron.all(
       return;
     }
     const result = await syncRecentSales(3, 45_000);
+    res.json(result);
+  }),
+);
+
+/**
+ * Processa UM lote de contas de campanhas (orçamento/gasto/cliques, ~45s).
+ * Chame de novo até `done: true` para completar o ciclo.
+ */
+cron.all(
+  '/sync-campaigns',
+  asyncHandler(async (_req, res) => {
+    const result = await runCampaignSyncBatch();
     res.json(result);
   }),
 );

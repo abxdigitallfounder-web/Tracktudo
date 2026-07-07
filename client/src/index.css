@@ -809,3 +809,10 @@ th.num {
 }
 .donut-center .dc-label { color: var(--text-muted); font-size: 13px; }
 .donut-center .dc-value { font-size: 26px; font-weight: 700; }
+
+/* ---------- Campanhas ---------- */
+.dot.ok { background: #16a34a; }
+.dot.danger { background: var(--danger); }
+.dot.muted { background: var(--text-muted); }
+.pos-text { color: #16a34a; }
+.neg-text { color: var(--danger); }
