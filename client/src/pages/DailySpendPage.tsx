@@ -44,11 +44,7 @@ export function DailySpendPage({ reloadKey }: { reloadKey: number }) {
   const [loading, setLoading] = useState(true);
   const [accountFilter, setAccountFilter] = useState<string>('all');
 
-  const [since, setSince] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 6);
-    return ymd(d);
-  });
+  const [since, setSince] = useState(() => ymd(new Date()));
   const [until, setUntil] = useState(() => ymd(new Date()));
 
   useEffect(() => {

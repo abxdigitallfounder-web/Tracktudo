@@ -76,11 +76,7 @@ export function RevenuePage({ reloadKey }: { reloadKey: number }) {
   const [syncing, setSyncing] = useState(false);
   const [apiEnabled, setApiEnabled] = useState<boolean | null>(null);
 
-  const [since, setSince] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 29);
-    return ymd(d);
-  });
+  const [since, setSince] = useState(() => ymd(new Date()));
   const [until, setUntil] = useState(() => ymd(new Date()));
 
   const load = useCallback(

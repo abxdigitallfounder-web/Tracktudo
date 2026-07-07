@@ -92,11 +92,7 @@ export function DashboardPage({ reloadKey }: { reloadKey: number }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [since, setSince] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 29);
-    return ymd(d);
-  });
+  const [since, setSince] = useState(() => ymd(new Date()));
   const [until, setUntil] = useState(() => ymd(new Date()));
 
   const load = useCallback(

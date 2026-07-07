@@ -59,11 +59,7 @@ export function CampaignsPage({ reloadKey }: { reloadKey: number }) {
   const [statusFilter, setStatusFilter] = useState('');
   const [productFilter, setProductFilter] = useState('');
 
-  const [since, setSince] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 29);
-    return ymd(d);
-  });
+  const [since, setSince] = useState(() => ymd(new Date()));
   const [until, setUntil] = useState(() => ymd(new Date()));
 
   // Contas carregam sempre (precisa delas pro seletor), campanhas só sob demanda.
