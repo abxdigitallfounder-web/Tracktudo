@@ -469,11 +469,16 @@ export interface CampaignsFilter {
   until: string;
   search?: string;
   status?: string;
-  accountId?: string;
+  /** IDs de conta ("act_...") a incluir. Vazio/ausente = nenhuma conta (retorna []). */
+  accountIds?: string[];
   product?: string;
 }
 
 export async function getCampaignsTable(filter: CampaignsFilter): Promise<CampaignRow[]> {
+  // Sem contas selecionadas, não há o que buscar — evita varrer milhares de
+  // campanhas de todas as contas sem necessidade (a tela exige seleção).
+  if (!filter.accountIds || filter.accountIds.length === 0) return [];
+
   const { rows } = await pool.query<CampaignRow>(
     `WITH insights AS (
        SELECT campaign_id,
@@ -508,9 +513,9 @@ export async function getCampaignsTable(filter: CampaignsFilter): Promise<Campai
      JOIN accounts a ON a.id = c.account_id
      LEFT JOIN insights i ON i.campaign_id = c.id
      LEFT JOIN sales_agg s ON s.campaign_id = c.id
-     WHERE ($4 = '' OR c.name ILIKE '%' || $4 || '%')
+     WHERE c.account_id = ANY($6::text[])
+       AND ($4 = '' OR c.name ILIKE '%' || $4 || '%')
        AND ($5 = '' OR c.effective_status = $5)
-       AND ($6 = '' OR c.account_id = $6)
        AND ($7 = '' OR s.produto = $7)
      ORDER BY spend DESC, c.name ASC`,
     [
@@ -519,7 +524,7 @@ export async function getCampaignsTable(filter: CampaignsFilter): Promise<Campai
       APPROVED_STATUSES,
       filter.search?.trim() ?? '',
       filter.status?.trim() ?? '',
-      filter.accountId?.trim() ?? '',
+      filter.accountIds.map((id) => (id.startsWith('act_') ? id : `act_${id}`)),
       filter.product?.trim() ?? '',
     ],
   );

@@ -208,13 +208,16 @@ api.get('/dashboard', asyncHandler(async (req, res) => {
 api.get('/campaigns', asyncHandler(async (req, res) => {
   const { since, until } = parseRange(req.query);
   const q = req.query as Record<string, string | undefined>;
+  const accountIds = q.accountIds
+    ? q.accountIds.split(',').map((s) => s.trim()).filter(Boolean)
+    : [];
   const [rows, untrackedSales] = await Promise.all([
     getCampaignsTable({
       since,
       until,
       search: q.search,
       status: q.status,
-      accountId: q.accountId,
+      accountIds,
       product: q.product,
     }),
     getUntrackedSalesCount(since, until),

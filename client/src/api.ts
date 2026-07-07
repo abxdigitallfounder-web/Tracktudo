@@ -238,15 +238,16 @@ export interface CampaignsFilter {
   until: string;
   search?: string;
   status?: string;
-  accountId?: string;
+  accountIds: string[];
   product?: string;
 }
 
 export async function apiGetCampaigns(f: CampaignsFilter): Promise<CampaignsResponse> {
+  if (f.accountIds.length === 0) return { rows: [], untrackedSales: 0 };
   const params = new URLSearchParams({ since: f.since, until: f.until });
   if (f.search) params.set('search', f.search);
   if (f.status) params.set('status', f.status);
-  if (f.accountId) params.set('accountId', f.accountId);
+  params.set('accountIds', f.accountIds.join(','));
   if (f.product) params.set('product', f.product);
   return get<CampaignsResponse>(`/api/campaigns?${params.toString()}`);
 }
