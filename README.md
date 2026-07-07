@@ -137,3 +137,51 @@ origem, protegido por senha.
 - O dashboard exige **senha** (`APP_PASSWORD`). Sem ela definida, o login fica desativado — nunca
   publique sem senha, pois os dados são gastos de anúncios de clientes.
 - O `.env` e o banco `.db` **nunca** vão para o repositório (`.gitignore`).
+
+---
+
+## Deploy em produção (Vercel)
+
+A Vercel é **serverless**: não existe um processo contínuo rodando 24/7, então o `node-cron`
+interno não funciona lá. A entrada é `api/index.ts` (na raiz), que reaproveita o mesmo Express
+`app` do backend (sem `app.listen`) — o frontend (`client/dist`) é servido como arquivos estáticos.
+
+### Passos
+
+1. No [Vercel](https://vercel.com): **Add New** → **Project** → importe o repositório do GitHub.
+   O `vercel.json` já configura o build do client e a função `api/index.ts`.
+2. Em **Settings → Environment Variables**, adicione (mesmas do `server/.env.example`):
+   - `DATABASE_URL`, `APP_PASSWORD`, `SESSION_SECRET`, `META_SYSTEM_USER_TOKEN` (ou `META_TOKENS`)
+   - `PERFECTPAY_WEBHOOK_TOKEN`, `PERFECTPAY_API_TOKEN` (módulo de Faturamento)
+   - `CRON_SECRET` — **defina um valor forte**; protege os endpoints de cron abaixo
+   - `NODE_ENV=production`
+3. **Deploy**.
+
+### Agendamento (cron externo — leia com atenção)
+
+O plano gratuito (Hobby) da Vercel só permite cron **nativo** 1x/dia, e cada função tem no máximo
+~60s de execução. Por isso as coletas periódicas são endpoints HTTP protegidos por `CRON_SECRET`,
+acionados por um **serviço de cron externo e gratuito**, como o [cron-job.org](https://cron-job.org):
+
+| Endpoint | Frequência sugerida | Observação |
+| --- | --- | --- |
+| `POST /api/cron/collect-limits?key=SEU_CRON_SECRET` | 1x/dia | Rápido (poucos segundos); também dá pra usar o cron nativo da Vercel para este. |
+| `POST /api/cron/collect-daily-spend?key=SEU_CRON_SECRET` | a cada 15 min | Processa em **lotes retomáveis** (orçamento ~45s por chamada) — um ciclo completo leva algumas chamadas até `"done": true`. |
+| `POST /api/cron/sync-sales?key=SEU_CRON_SECRET` | a cada 1h | Sincroniza vendas da PerfectPay atualizadas nos últimos 3 dias. |
+
+O segredo também pode ir no header `Authorization: Bearer SEU_CRON_SECRET` em vez da query string.
+
+### Webhook da PerfectPay
+
+Como a Vercel expõe uma URL pública HTTPS, o webhook de vendas funciona em tempo real — configure
+na PerfectPay (**Ferramentas → Webhook - Vendas**) apontando para:
+
+```
+https://SEU-APP.vercel.app/api/webhook/perfectpay
+```
+
+### Backfill inicial de vendas
+
+Na Vercel, o backfill automático no boot (que existe em hosts tradicionais) fica desativado — dispare
+manualmente pela tela **Faturamento → Sincronizar vendas**, ou chame `POST /api/sales/sync` uma vez
+após o primeiro deploy.

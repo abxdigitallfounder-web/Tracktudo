@@ -192,11 +192,26 @@ export async function setAccountsFolder(
 
 /** Grava uma conta e um snapshot de limite (numa transação). */
 export async function saveAccountSnapshot(acc: AdAccount, capturedAt: string): Promise<void> {
+  await saveAccountSnapshots([acc], capturedAt);
+}
+
+/**
+ * Grava VÁRIAS contas e seus snapshots numa ÚNICA transação (upsert em lote via
+ * unnest). Evita 1 ida-e-volta de rede por conta — essencial em hosts
+ * serverless com orçamento de tempo curto, e bem mais rápido em qualquer host
+ * (ex.: 80 contas: ~55s conta-a-conta vs. ~1-2s em lote).
+ */
+export async function saveAccountSnapshots(accs: AdAccount[], capturedAt: string): Promise<void> {
+  if (accs.length === 0) return;
+  const ids = accs.map((a) => normalizeId(a.id));
   await withTx(async (c) => {
     await c.query(
       `INSERT INTO accounts
          (id, name, currency, status, disable_reason, business_id, business_name, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       SELECT * FROM unnest(
+         $1::text[], $2::text[], $3::text[], $4::int[],
+         $5::int[], $6::text[], $7::text[], $8::text[]
+       )
        ON CONFLICT (id) DO UPDATE SET
          name = excluded.name,
          currency = excluded.currency,
@@ -206,28 +221,31 @@ export async function saveAccountSnapshot(acc: AdAccount, capturedAt: string): P
          business_name = excluded.business_name,
          updated_at = excluded.updated_at`,
       [
-        normalizeId(acc.id),
-        acc.name,
-        acc.currency,
-        acc.status,
-        acc.disableReason,
-        acc.businessId,
-        acc.businessName,
-        capturedAt,
+        ids,
+        accs.map((a) => a.name),
+        accs.map((a) => a.currency),
+        accs.map((a) => a.status),
+        accs.map((a) => a.disableReason),
+        accs.map((a) => a.businessId),
+        accs.map((a) => a.businessName),
+        accs.map(() => capturedAt),
       ],
     );
     await c.query(
       `INSERT INTO limit_snapshots
          (account_id, spend_cap, amount_spent, balance, available, pct_used, captured_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+       SELECT * FROM unnest(
+         $1::text[], $2::float8[], $3::float8[],
+         $4::float8[], $5::float8[], $6::float8[], $7::text[]
+       )`,
       [
-        normalizeId(acc.id),
-        acc.spendCap,
-        acc.amountSpent,
-        acc.balance,
-        acc.available,
-        acc.pctUsed,
-        capturedAt,
+        ids,
+        accs.map((a) => a.spendCap),
+        accs.map((a) => a.amountSpent),
+        accs.map((a) => a.balance),
+        accs.map((a) => a.available),
+        accs.map((a) => a.pctUsed),
+        accs.map(() => capturedAt),
       ],
     );
   });

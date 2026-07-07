@@ -2,6 +2,7 @@
   "name": "tracktudo",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Monitoramento de contas de anúncio Meta (frontend + backend)",
   "engines": {
     "node": ">=20"
