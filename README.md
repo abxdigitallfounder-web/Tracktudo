@@ -18,7 +18,7 @@ Os dados vêm da **Meta Marketing API (Graph API v25.0)**.
 | Camada     | Tecnologia                                   |
 | ---------- | -------------------------------------------- |
 | Backend    | Node.js + Express + TypeScript               |
-| Banco      | SQLite (`better-sqlite3`)                    |
+| Banco      | Postgres (`pg`) — ex.: Neon, Supabase        |
 | Agendador  | `node-cron`                                  |
 | Frontend   | React + Vite + TypeScript + `recharts`       |
 
@@ -125,12 +125,12 @@ origem, protegido por senha.
 
 ### Observações do plano gratuito do Render
 
-- O serviço **"dorme"** após ~15 min sem acesso; o disco é **efêmero**. Por isso o TRACKTUDO
-  **recoleta os dados da Meta ao acordar** (limites + últimos 30 dias). O primeiro acesso após
-  dormir leva ~1 min para popular.
-- Como o serviço dorme, o **agendador (cron)** só roda enquanto está acordado. Para coleta
-  automática 24/7, use um plano pago (com disco persistente, aponte `DATABASE_PATH` para o volume)
-  ou um serviço always-on.
+- Os dados agora ficam num **Postgres externo** (`DATABASE_URL`, ex.: Neon), então **não são
+  perdidos** quando o serviço dorme — diferente do SQLite em disco efêmero de antes.
+- O serviço ainda **"dorme"** após ~15 min sem acesso. Como o **agendador (cron)** só roda
+  enquanto está acordado, para coleta automática 24/7 use um plano pago ou um serviço always-on
+  (ou um ping externo que mantenha o app acordado). Ao acordar, se o banco já tiver dados, o
+  dashboard aparece na hora; a coleta só refaz quando o cron ou o botão "Atualizar" disparam.
 
 ### Segurança
 

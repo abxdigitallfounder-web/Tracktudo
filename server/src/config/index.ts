@@ -85,8 +85,11 @@ export const config = {
     get isProduction(): boolean {
       return this.nodeEnv === 'production';
     },
-    /** Caminho do arquivo SQLite (permite disco persistente em produção). */
-    databasePath: process.env.DATABASE_PATH?.trim() || '',
+    /**
+     * Connection string do Postgres (Neon/Supabase/etc.).
+     * Ex.: postgresql://user:pass@host/db?sslmode=require
+     */
+    databaseUrl: process.env.DATABASE_URL?.trim() || '',
   },
   auth: {
     /** Senha única para acessar o dashboard. Vazio = sem login (apenas dev/local). */
@@ -94,10 +97,26 @@ export const config = {
     /** Segredo para assinar o cookie de sessão. */
     secret: process.env.SESSION_SECRET?.trim() || '',
   },
+  perfectpay: {
+    /**
+     * Token de segurança do webhook da PerfectPay. Se definido, só aceitamos
+     * postbacks cujo campo "token" bata com este valor. Deixe vazio só em teste.
+     */
+    webhookToken: process.env.PERFECTPAY_WEBHOOK_TOKEN?.trim() || '',
+    /**
+     * Token Pessoal da API (JWT) — Ferramentas → API → Gerar Token Pessoal.
+     * Usado para puxar o histórico de vendas (backfill/reconciliação).
+     */
+    apiToken: process.env.PERFECTPAY_API_TOKEN?.trim() || '',
+    /** Dias de histórico no backfill inicial de vendas (padrão 365). */
+    backfillDays: num('PERFECTPAY_BACKFILL_DAYS', 365),
+  },
   cron: {
     limits: process.env.CRON_LIMITS?.trim() || '0 */12 * * *',
     dailySpend: process.env.CRON_DAILY_SPEND?.trim() || '0 */6 * * *',
     backfillDays: num('BACKFILL_DAYS', 30),
+    /** Sincronização incremental de vendas (padrão: a cada hora). */
+    salesSync: process.env.CRON_SALES_SYNC?.trim() || '15 * * * *',
   },
   rateLimit: {
     requestDelayMs: num('REQUEST_DELAY_MS', 250),

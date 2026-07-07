@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { config } from '../config/index.js';
 import { collectLimitsJob, collectDailyJob } from '../services/collector.js';
+import { salesApiEnabled, syncRecentSales } from '../services/salesCollector.js';
 
 /**
  * Inicia os jobs agendados:
@@ -28,7 +29,23 @@ export function startScheduler(): void {
     });
   }
 
+  // Sincronização incremental de vendas (só se a API estiver configurada).
+  if (salesApiEnabled()) {
+    if (!cron.validate(config.cron.salesSync)) {
+      console.error(`[Cron] Expressão inválida em CRON_SALES_SYNC: "${config.cron.salesSync}"`);
+    } else {
+      cron.schedule(config.cron.salesSync, () => {
+        console.log('[Cron] Sincronizando vendas recentes (PerfectPay)...');
+        syncRecentSales(3).catch((err) =>
+          console.error('[Cron] Erro no sync de vendas:', (err as Error).message),
+        );
+      });
+    }
+  }
+
   console.log(
-    `[Cron] Agendado — limites: "${config.cron.limits}", gastos: "${config.cron.dailySpend}".`,
+    `[Cron] Agendado — limites: "${config.cron.limits}", gastos: "${config.cron.dailySpend}"` +
+      (salesApiEnabled() ? `, vendas: "${config.cron.salesSync}"` : '') +
+      '.',
   );
 }

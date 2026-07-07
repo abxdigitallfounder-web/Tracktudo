@@ -26,3 +26,12 @@ services:
         sync: false
       - key: META_TOKENS
         sync: false
+      # Connection string do Postgres (Neon/Supabase). Use a URL do host -pooler.
+      - key: DATABASE_URL
+        sync: false
+      # Token de segurança do webhook de vendas da PerfectPay.
+      - key: PERFECTPAY_WEBHOOK_TOKEN
+        sync: false
+      # Token Pessoal da API PerfectPay (JWT) — puxa o histórico de vendas.
+      - key: PERFECTPAY_API_TOKEN
+        sync: false

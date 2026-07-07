@@ -34,8 +34,8 @@ export function isCollecting(): boolean {
 export async function collectLimits(accounts?: AdAccount[]): Promise<AdAccount[]> {
   const list = accounts ?? (await listAdAccounts());
   const capturedAt = new Date().toISOString();
-  for (const acc of list) saveAccountSnapshot(acc, capturedAt);
-  setState('last_limits_collect', capturedAt);
+  for (const acc of list) await saveAccountSnapshot(acc, capturedAt);
+  await setState('last_limits_collect', capturedAt);
   console.log(`[Coleta] Limites: ${list.length} contas salvas.`);
   return list;
 }
@@ -56,7 +56,7 @@ export async function collectDailySpend(
   for (const acc of accounts) {
     try {
       const rows = await getDailySpend(acc.id, since, until);
-      saveDailySpend(rows);
+      await saveDailySpend(rows);
       totalRows += rows.length;
       ok += 1;
     } catch (err) {
@@ -65,7 +65,7 @@ export async function collectDailySpend(
     }
     await sleep(config.rateLimit.requestDelayMs);
   }
-  setState('last_daily_collect', new Date().toISOString());
+  await setState('last_daily_collect', new Date().toISOString());
   console.log(
     `[Coleta] Gastos [${since}..${until}]: ${ok} contas ok, ${fail} falhas, ${totalRows} dias gravados.`,
   );
@@ -86,7 +86,7 @@ export async function collectAll(): Promise<void> {
     const accounts = await listAdAccounts();
     await collectLimits(accounts);
 
-    const isFirstRun = !getState('last_daily_collect');
+    const isFirstRun = !(await getState('last_daily_collect'));
     const since = isFirstRun ? daysAgo(config.cron.backfillDays) : daysAgo(2);
     if (isFirstRun) {
       console.log(`[Coleta] Primeira execução: backfill de ${config.cron.backfillDays} dias.`);

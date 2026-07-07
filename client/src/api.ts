@@ -11,6 +11,7 @@ export interface Account {
   businessName: string | null;
   spendCap: number | null;
   amountSpent: number;
+  todaySpend: number;
   balance: number | null;
   available: number | null;
   pctUsed: number | null;
@@ -45,6 +46,9 @@ export interface Status {
   lastLimitsCollect: string | null;
   lastDailyCollect: string | null;
   tokenCount: number;
+  salesApiEnabled?: boolean;
+  salesSyncing?: boolean;
+  lastSalesSync?: string | null;
 }
 
 async function get<T>(url: string): Promise<T> {
@@ -60,6 +64,75 @@ export interface TokenInfo {
   expiresAt: number | null;
   daysLeft: number | null;
   error?: string;
+}
+
+// ---- Faturamento (PerfectPay) ----
+export interface SalesSummary {
+  approvedCount: number;
+  todayCount: number;
+  pendingCount: number;
+  refundedCount: number;
+  revenueApprovedByCurrency: Record<string, number>;
+  todayRevenueByCurrency: Record<string, number>;
+  refundedAmountByCurrency: Record<string, number>;
+}
+
+export interface RevenueRow {
+  date: string;
+  currency: string;
+  revenue: number;
+  count: number;
+}
+
+export interface Sale {
+  code: string;
+  saleAmount: number;
+  currency: string;
+  status: number;
+  statusLabel: string;
+  statusDetail: string | null;
+  paymentType: number | null;
+  paymentLabel: string;
+  productName: string | null;
+  customerName: string | null;
+  customerEmail: string | null;
+  dateApproved: string | null;
+  dateCreated: string | null;
+  receivedAt: string;
+}
+
+export interface DashboardData {
+  currency: string;
+  grossRevenue: number;
+  netRevenue: number;
+  refunds: number;
+  taxes: number;
+  adSpend: number;
+  profit: number;
+  pendingValue: number;
+  roi: number | null;
+  margin: number | null;
+  approvedCount: number;
+  byPayment: Array<{ method: string; count: number }>;
+  bySource: Array<{ source: string; count: number; value: number }>;
+  byProduct: Array<{ product: string; count: number; value: number }>;
+  byCountry: Array<{ country: string; count: number; value: number }>;
+  byHour: Array<{ hour: number; count: number }>;
+  profitByHour: Array<{ hour: number; profit: number }>;
+  approval: Array<{ method: string; rate: number | null }>;
+}
+
+export const apiGetDashboard = (since: string, until: string) =>
+  get<DashboardData>(`/api/dashboard?since=${since}&until=${until}`);
+
+export const apiGetSalesSummary = () => get<SalesSummary>('/api/sales/summary');
+export const apiGetRevenue = (since: string, until: string) =>
+  get<RevenueRow[]>(`/api/sales/revenue?since=${since}&until=${until}`);
+export const apiGetSales = (limit = 50) => get<Sale[]>(`/api/sales?limit=${limit}`);
+
+export async function apiSyncSales(): Promise<{ started: boolean; message?: string }> {
+  const res = await fetch('/api/sales/sync', { method: 'POST' });
+  return res.json();
 }
 
 export const apiGetAccounts = () => get<Account[]>('/api/accounts');

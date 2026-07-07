@@ -5,13 +5,21 @@ import { MoneyByCurrency, StatusBadge, UsageBar, riskLevel } from '../components
 import { TagMenu } from '../components/TagMenu';
 import { statusPriority } from '../accountSort';
 
-type SortKey = 'name' | 'status' | 'spendCap' | 'amountSpent' | 'available' | 'pctUsed';
+type SortKey =
+  | 'name'
+  | 'status'
+  | 'spendCap'
+  | 'amountSpent'
+  | 'todaySpend'
+  | 'available'
+  | 'pctUsed';
 type SortDir = 'asc' | 'desc';
 
 const COLUMNS: { key: SortKey; label: string; num?: boolean }[] = [
   { key: 'name', label: 'Conta' },
   { key: 'status', label: 'Status' },
   { key: 'spendCap', label: 'Limite', num: true },
+  { key: 'todaySpend', label: 'Gasto hoje', num: true },
   { key: 'amountSpent', label: 'Gasto acumulado', num: true },
   { key: 'available', label: 'Disponível', num: true },
   { key: 'pctUsed', label: '% usado', num: true },
@@ -169,14 +177,14 @@ export function LimitsPage({ reloadKey }: { reloadKey: number }) {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={7} className="empty">
+                <td colSpan={8} className="empty">
                   Carregando…
                 </td>
               </tr>
             )}
             {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="empty">
+                <td colSpan={8} className="empty">
                   Nenhuma conta encontrada.
                 </td>
               </tr>
@@ -223,6 +231,13 @@ export function LimitsPage({ reloadKey }: { reloadKey: number }) {
                         <span className="muted">Sem limite</span>
                       ) : (
                         formatMoney(a.spendCap, a.currency)
+                      )}
+                    </td>
+                    <td className="num">
+                      {a.todaySpend > 0 ? (
+                        formatMoney(a.todaySpend, a.currency)
+                      ) : (
+                        <span className="muted">—</span>
                       )}
                     </td>
                     <td className="num">{formatMoney(a.amountSpent, a.currency)}</td>
