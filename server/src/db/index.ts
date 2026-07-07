@@ -126,16 +126,18 @@ export async function initSchema(): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_campaigns_account ON campaigns(account_id);
 
-    -- Insights diários por campanha (gasto, cliques, visualizações de página).
+    -- Insights diários por campanha (gasto, cliques, visualizações de página, iniciar checkout).
     CREATE TABLE IF NOT EXISTS campaign_daily_insights (
-      campaign_id TEXT NOT NULL REFERENCES campaigns(id),
-      date        TEXT NOT NULL,
-      spend       DOUBLE PRECISION NOT NULL DEFAULT 0,
-      clicks      INTEGER NOT NULL DEFAULT 0,
-      page_views  INTEGER NOT NULL DEFAULT 0,
+      campaign_id      TEXT NOT NULL REFERENCES campaigns(id),
+      date             TEXT NOT NULL,
+      spend            DOUBLE PRECISION NOT NULL DEFAULT 0,
+      clicks           INTEGER NOT NULL DEFAULT 0,
+      page_views       INTEGER NOT NULL DEFAULT 0,
+      initiate_checkout INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (campaign_id, date)
     );
     CREATE INDEX IF NOT EXISTS idx_campaign_insights_date ON campaign_daily_insights(date);
+    ALTER TABLE campaign_daily_insights ADD COLUMN IF NOT EXISTS initiate_checkout INTEGER NOT NULL DEFAULT 0;
 
     -- Migrações idempotentes para bancos já existentes.
     ALTER TABLE accounts ADD COLUMN IF NOT EXISTS business_id   TEXT;
@@ -144,6 +146,18 @@ export async function initSchema(): Promise<void> {
     ALTER TABLE accounts ADD COLUMN IF NOT EXISTS folder_id     INTEGER;
     ALTER TABLE sales ADD COLUMN IF NOT EXISTS utm_campaign TEXT;
     CREATE INDEX IF NOT EXISTS idx_sales_utm_campaign ON sales(utm_campaign);
+
+    -- Histórico de ativação/pausa de campanhas feitas pelo próprio TRACKTUDO.
+    CREATE TABLE IF NOT EXISTS campaign_status_log (
+      id            SERIAL PRIMARY KEY,
+      campaign_id   TEXT NOT NULL,
+      campaign_name TEXT NOT NULL,
+      account_id    TEXT NOT NULL,
+      old_status    TEXT NOT NULL,
+      new_status    TEXT NOT NULL,
+      changed_at    TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_campaign_status_log_campaign ON campaign_status_log(campaign_id);
   `);
 }
 
@@ -423,6 +437,7 @@ export interface CampaignDailyInsightInput {
   spend: number;
   clicks: number;
   pageViews: number;
+  initiateCheckout: number;
 }
 
 /** Grava/atualiza vários insights diários de campanha numa única transação. */
@@ -432,21 +447,88 @@ export async function saveCampaignDailyInsights(
   if (rows.length === 0) return;
   await withTx(async (c) => {
     await c.query(
-      `INSERT INTO campaign_daily_insights (campaign_id, date, spend, clicks, page_views)
-       SELECT * FROM unnest($1::text[], $2::text[], $3::float8[], $4::int[], $5::int[])
+      `INSERT INTO campaign_daily_insights
+         (campaign_id, date, spend, clicks, page_views, initiate_checkout)
+       SELECT * FROM unnest($1::text[], $2::text[], $3::float8[], $4::int[], $5::int[], $6::int[])
        ON CONFLICT (campaign_id, date) DO UPDATE SET
          spend = excluded.spend,
          clicks = excluded.clicks,
-         page_views = excluded.page_views`,
+         page_views = excluded.page_views,
+         initiate_checkout = excluded.initiate_checkout`,
       [
         rows.map((r) => r.campaignId),
         rows.map((r) => r.date),
         rows.map((r) => r.spend),
         rows.map((r) => r.clicks),
         rows.map((r) => r.pageViews),
+        rows.map((r) => r.initiateCheckout),
       ],
     );
   });
+}
+
+export interface CampaignLookup {
+  id: string;
+  name: string;
+  account_id: string;
+  status: string;
+}
+
+/** Busca uma campanha pelo id (nome/conta/status atuais), para validar antes de mudar status. */
+export async function getCampaignById(id: string): Promise<CampaignLookup | null> {
+  const { rows } = await pool.query<CampaignLookup>(
+    `SELECT id, name, account_id, status FROM campaigns WHERE id = $1`,
+    [id],
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * Atualiza o status local de uma campanha (após ativar/pausar com sucesso na
+ * Meta) e registra a mudança no histórico. Chamado sempre junto, numa transação.
+ */
+export async function updateCampaignStatusAndLog(
+  campaignId: string,
+  campaignName: string,
+  accountId: string,
+  oldStatus: string,
+  newStatus: string,
+): Promise<void> {
+  const changedAt = new Date().toISOString();
+  await withTx(async (c) => {
+    await c.query(
+      `UPDATE campaigns SET status = $1, effective_status = $1, updated_at = $2 WHERE id = $3`,
+      [newStatus, changedAt, campaignId],
+    );
+    await c.query(
+      `INSERT INTO campaign_status_log
+         (campaign_id, campaign_name, account_id, old_status, new_status, changed_at)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [campaignId, campaignName, normalizeId(accountId), oldStatus, newStatus, changedAt],
+    );
+  });
+}
+
+export interface CampaignStatusLogRow {
+  id: number;
+  campaign_id: string;
+  campaign_name: string;
+  account_id: string;
+  old_status: string;
+  new_status: string;
+  changed_at: string;
+}
+
+/** Histórico recente de ativações/pausas feitas pelo TRACKTUDO. */
+export async function getCampaignStatusLog(limit: number): Promise<CampaignStatusLogRow[]> {
+  const { rows } = await pool.query<CampaignStatusLogRow>(
+    `SELECT id, campaign_id, campaign_name, account_id, old_status, new_status, changed_at
+     FROM campaign_status_log
+     ORDER BY id DESC
+     LIMIT $1`,
+    [limit],
+  );
+  return rows;
 }
 
 function normalizeId(id: string): string {
