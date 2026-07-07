@@ -67,3 +67,11 @@ export const IconMoney = (p: P) => (
     <path d="M6 12h.01M18 12h.01" />
   </svg>
 );
+
+export const IconTarget = (p: P) => (
+  <svg {...base} {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="12" r="5" />
+    <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+  </svg>
+);

@@ -5,9 +5,13 @@ import {
 } from './accountStatus.js';
 import type {
   AdAccount,
+  Campaign,
+  CampaignDailyInsight,
   DailySpend,
   Paged,
   RawAdAccount,
+  RawCampaign,
+  RawCampaignInsight,
   RawDailyInsight,
 } from './types.js';
 
@@ -287,6 +291,106 @@ export async function getDailySpend(
         accountId: actId,
         date: row.date_start,
         spend: spendToUnit(row.spend),
+      });
+    }
+
+    after = body.paging?.next ? body.paging.cursors?.after : undefined;
+    if (after) await sleep(config.rateLimit.requestDelayMs);
+  } while (after);
+
+  return result;
+}
+
+function normalizeCampaign(raw: RawCampaign, accountId: string): Campaign {
+  return {
+    id: raw.id,
+    accountId: normalizeActId(accountId),
+    name: raw.name ?? raw.id,
+    status: raw.status ?? 'UNKNOWN',
+    effectiveStatus: raw.effective_status ?? raw.status ?? 'UNKNOWN',
+    dailyBudget: raw.daily_budget != null ? centsToUnit(raw.daily_budget) : null,
+    lifetimeBudget: raw.lifetime_budget != null ? centsToUnit(raw.lifetime_budget) : null,
+  };
+}
+
+/** Lista as campanhas (com orçamento/status) de UMA conta. */
+export async function getCampaigns(accountId: string, token?: string): Promise<Campaign[]> {
+  const actId = normalizeActId(accountId);
+  const useToken = token ?? getTokenForAccount(actId);
+  const result: Campaign[] = [];
+  let after: string | undefined;
+
+  do {
+    const params: Record<string, string> = {
+      fields: 'name,status,effective_status,daily_budget,lifetime_budget',
+      limit: '100',
+    };
+    if (after) params.after = after;
+
+    const { body } = await graphGet<Paged<RawCampaign>>(
+      `${actId}/campaigns`,
+      params,
+      `campanhas ${actId}`,
+      useToken,
+    );
+
+    for (const raw of body.data) result.push(normalizeCampaign(raw, actId));
+
+    after = body.paging?.next ? body.paging.cursors?.after : undefined;
+    if (after) await sleep(config.rateLimit.requestDelayMs);
+  } while (after);
+
+  return result;
+}
+
+/** Extrai o valor de landing_page_view do array `actions` do insight. */
+function extractPageViews(actions: RawCampaignInsight['actions']): number {
+  if (!actions) return 0;
+  const hit = actions.find((a) => a.action_type === 'landing_page_view');
+  return hit ? Number(hit.value) || 0 : 0;
+}
+
+/**
+ * Insights diários por campanha (gasto, cliques, visualizações de página) de
+ * UMA conta, no intervalo [since, until]. `level=campaign` retorna 1 linha por
+ * campanha por dia.
+ */
+export async function getCampaignDailyInsights(
+  accountId: string,
+  since: string,
+  until: string,
+  token?: string,
+): Promise<CampaignDailyInsight[]> {
+  const actId = normalizeActId(accountId);
+  const useToken = token ?? getTokenForAccount(actId);
+  const result: CampaignDailyInsight[] = [];
+  let after: string | undefined;
+
+  do {
+    const params: Record<string, string> = {
+      fields: 'campaign_id,spend,clicks,actions',
+      level: 'campaign',
+      time_increment: '1',
+      time_range: JSON.stringify({ since, until }),
+      limit: '100',
+    };
+    if (after) params.after = after;
+
+    const { body } = await graphGet<Paged<RawCampaignInsight>>(
+      `${actId}/insights`,
+      params,
+      `insights de campanha ${actId}`,
+      useToken,
+    );
+
+    for (const row of body.data) {
+      if (!row.campaign_id || !row.date_start) continue;
+      result.push({
+        campaignId: row.campaign_id,
+        date: row.date_start,
+        spend: spendToUnit(row.spend),
+        clicks: Number(row.clicks) || 0,
+        pageViews: extractPageViews(row.actions),
       });
     }
 

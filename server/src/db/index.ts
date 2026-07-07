@@ -113,11 +113,37 @@ export async function initSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_sales_status ON sales(status);
     CREATE INDEX IF NOT EXISTS idx_sales_approved ON sales(date_approved);
 
+    -- Campanhas da Meta (nome, orçamento, status) — uma linha por campanha.
+    CREATE TABLE IF NOT EXISTS campaigns (
+      id               TEXT PRIMARY KEY,
+      account_id       TEXT NOT NULL REFERENCES accounts(id),
+      name             TEXT NOT NULL,
+      status           TEXT NOT NULL DEFAULT 'UNKNOWN',
+      effective_status TEXT NOT NULL DEFAULT 'UNKNOWN',
+      daily_budget     DOUBLE PRECISION,
+      lifetime_budget  DOUBLE PRECISION,
+      updated_at       TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_campaigns_account ON campaigns(account_id);
+
+    -- Insights diários por campanha (gasto, cliques, visualizações de página).
+    CREATE TABLE IF NOT EXISTS campaign_daily_insights (
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id),
+      date        TEXT NOT NULL,
+      spend       DOUBLE PRECISION NOT NULL DEFAULT 0,
+      clicks      INTEGER NOT NULL DEFAULT 0,
+      page_views  INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (campaign_id, date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_campaign_insights_date ON campaign_daily_insights(date);
+
     -- Migrações idempotentes para bancos já existentes.
     ALTER TABLE accounts ADD COLUMN IF NOT EXISTS business_id   TEXT;
     ALTER TABLE accounts ADD COLUMN IF NOT EXISTS business_name TEXT;
     ALTER TABLE accounts ADD COLUMN IF NOT EXISTS tags          TEXT;
     ALTER TABLE accounts ADD COLUMN IF NOT EXISTS folder_id     INTEGER;
+    ALTER TABLE sales ADD COLUMN IF NOT EXISTS utm_campaign TEXT;
+    CREATE INDEX IF NOT EXISTS idx_sales_utm_campaign ON sales(utm_campaign);
   `);
 }
 
@@ -296,6 +322,8 @@ export interface SaleInput {
   customerEmail: string | null;
   dateCreated: string | null;
   dateApproved: string | null;
+  /** ID da campanha da Meta que gerou a venda (metadata.utm_campaign). */
+  utmCampaign: string | null;
   raw: string;
 }
 
@@ -309,8 +337,8 @@ export async function saveSale(s: SaleInput): Promise<void> {
     `INSERT INTO sales
        (code, sale_amount, currency, status, status_detail, payment_type,
         product_code, product_name, customer_name, customer_email,
-        date_created, date_approved, received_at, raw)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        date_created, date_approved, received_at, raw, utm_campaign)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
      ON CONFLICT (code) DO UPDATE SET
        sale_amount = excluded.sale_amount,
        currency = excluded.currency,
@@ -323,7 +351,8 @@ export async function saveSale(s: SaleInput): Promise<void> {
        customer_email = excluded.customer_email,
        date_approved = excluded.date_approved,
        received_at = excluded.received_at,
-       raw = excluded.raw`,
+       raw = excluded.raw,
+       utm_campaign = excluded.utm_campaign`,
     [
       s.code,
       s.saleAmount,
@@ -339,8 +368,85 @@ export async function saveSale(s: SaleInput): Promise<void> {
       s.dateApproved,
       new Date().toISOString(),
       s.raw,
+      s.utmCampaign,
     ],
   );
+}
+
+// ---------- Campanhas (Meta) ----------
+export interface CampaignInput {
+  id: string;
+  accountId: string;
+  name: string;
+  status: string;
+  effectiveStatus: string;
+  dailyBudget: number | null;
+  lifetimeBudget: number | null;
+}
+
+/** Grava/atualiza várias campanhas numa única transação (upsert em lote). */
+export async function saveCampaigns(campaigns: CampaignInput[]): Promise<void> {
+  if (campaigns.length === 0) return;
+  const updatedAt = new Date().toISOString();
+  await withTx(async (c) => {
+    await c.query(
+      `INSERT INTO campaigns
+         (id, account_id, name, status, effective_status, daily_budget, lifetime_budget, updated_at)
+       SELECT * FROM unnest(
+         $1::text[], $2::text[], $3::text[], $4::text[],
+         $5::text[], $6::float8[], $7::float8[], $8::text[]
+       )
+       ON CONFLICT (id) DO UPDATE SET
+         name = excluded.name,
+         status = excluded.status,
+         effective_status = excluded.effective_status,
+         daily_budget = excluded.daily_budget,
+         lifetime_budget = excluded.lifetime_budget,
+         updated_at = excluded.updated_at`,
+      [
+        campaigns.map((c2) => c2.id),
+        campaigns.map((c2) => normalizeId(c2.accountId)),
+        campaigns.map((c2) => c2.name),
+        campaigns.map((c2) => c2.status),
+        campaigns.map((c2) => c2.effectiveStatus),
+        campaigns.map((c2) => c2.dailyBudget),
+        campaigns.map((c2) => c2.lifetimeBudget),
+        campaigns.map(() => updatedAt),
+      ],
+    );
+  });
+}
+
+export interface CampaignDailyInsightInput {
+  campaignId: string;
+  date: string;
+  spend: number;
+  clicks: number;
+  pageViews: number;
+}
+
+/** Grava/atualiza vários insights diários de campanha numa única transação. */
+export async function saveCampaignDailyInsights(
+  rows: CampaignDailyInsightInput[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  await withTx(async (c) => {
+    await c.query(
+      `INSERT INTO campaign_daily_insights (campaign_id, date, spend, clicks, page_views)
+       SELECT * FROM unnest($1::text[], $2::text[], $3::float8[], $4::int[], $5::int[])
+       ON CONFLICT (campaign_id, date) DO UPDATE SET
+         spend = excluded.spend,
+         clicks = excluded.clicks,
+         page_views = excluded.page_views`,
+      [
+        rows.map((r) => r.campaignId),
+        rows.map((r) => r.date),
+        rows.map((r) => r.spend),
+        rows.map((r) => r.clicks),
+        rows.map((r) => r.pageViews),
+      ],
+    );
+  });
 }
 
 function normalizeId(id: string): string {

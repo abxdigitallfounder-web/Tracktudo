@@ -170,6 +170,7 @@ acionados por um **serviço de cron externo e gratuito**, como o [cron-job.org](
 | `POST /api/cron/collect-limits?key=SEU_CRON_SECRET` | 1x/dia | Rápido (poucos segundos); também dá pra usar o cron nativo da Vercel para este. |
 | `POST /api/cron/collect-daily-spend?key=SEU_CRON_SECRET` | a cada 15 min | Processa em **lotes retomáveis** (orçamento ~45s por chamada) — um ciclo completo leva algumas chamadas até `"done": true`. |
 | `POST /api/cron/sync-sales?key=SEU_CRON_SECRET` | a cada 1h | Sincroniza vendas da PerfectPay atualizadas nos últimos 3 dias. |
+| `POST /api/cron/sync-campaigns?key=SEU_CRON_SECRET` | a cada 15 min | Sincroniza campanhas (orçamento/status) + gasto/cliques/vis. de página por campanha, em **lotes retomáveis** (~45s por chamada) — necessário para a tela **Campanhas**. |
 
 O segredo também pode ir no header `Authorization: Bearer SEU_CRON_SECRET` em vez da query string.
 
