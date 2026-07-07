@@ -91,18 +91,7 @@ export const config = {
      */
     databaseUrl: process.env.DATABASE_URL?.trim() || '',
   },
-  auth: {
-    /** Senha única para acessar o dashboard. Vazio = sem login (apenas dev/local). */
-    password: process.env.APP_PASSWORD?.trim() || '',
-    /** Segredo para assinar o cookie de sessão. */
-    secret: process.env.SESSION_SECRET?.trim() || '',
-  },
   perfectpay: {
-    /**
-     * Token de segurança do webhook da PerfectPay. Se definido, só aceitamos
-     * postbacks cujo campo "token" bata com este valor. Deixe vazio só em teste.
-     */
-    webhookToken: process.env.PERFECTPAY_WEBHOOK_TOKEN?.trim() || '',
     /**
      * Token Pessoal da API (JWT) — Ferramentas → API → Gerar Token Pessoal.
      * Usado para puxar o histórico de vendas (backfill/reconciliação).

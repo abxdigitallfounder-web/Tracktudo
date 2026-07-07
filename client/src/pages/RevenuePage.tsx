@@ -272,7 +272,7 @@ export function RevenuePage({ reloadKey }: { reloadKey: number }) {
           ⚠️ Nenhuma venda ainda.{' '}
           {apiEnabled
             ? 'Clique em "Sincronizar vendas" para puxar o histórico da PerfectPay via API.'
-            : 'Configure o webhook (Ferramentas → Webhook - Vendas) ou o PERFECTPAY_API_TOKEN.'}
+            : 'Configure o PERFECTPAY_API_TOKEN para sincronizar as vendas.'}
         </div>
       )}
 

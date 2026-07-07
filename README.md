@@ -101,14 +101,14 @@ _(Detalhes de cada módulo são preenchidos nas próximas fases de desenvolvimen
 ## Variáveis de ambiente
 
 Veja `server/.env.example` para a lista completa (token, business id, versão da API, cron, rate
-limit, senha de acesso e opções de produção).
+limit e opções de produção).
 
 ---
 
 ## Deploy em produção (Render)
 
 O TRACKTUDO sobe como **um único web service**: o backend compila e serve o frontend na mesma
-origem, protegido por senha.
+origem. **Não há login/senha** — a URL fica aberta para quem a acessar.
 
 ### Passos
 
@@ -117,11 +117,10 @@ origem, protegido por senha.
    `render.yaml` e cria o serviço `tracktudo` automaticamente.
    - Alternativa manual: **New Web Service** → Build: `npm run build` → Start: `npm start`.
 3. Em **Environment**, preencha as variáveis marcadas como secretas:
-   - `APP_PASSWORD` — a senha do dashboard.
    - `META_SYSTEM_USER_TOKEN` — seu token principal da Meta.
    - `META_TOKENS` — tokens adicionais (opcional, formato `rotulo|token,...`).
-   - `SESSION_SECRET` é gerado automaticamente pelo Render.
-4. **Deploy**. Ao abrir a URL, o app pede a senha e começa a coletar os dados.
+   - `DATABASE_URL`, `PERFECTPAY_API_TOKEN`, `CRON_SECRET`.
+4. **Deploy**.
 
 ### Observações do plano gratuito do Render
 
@@ -134,9 +133,10 @@ origem, protegido por senha.
 
 ### Segurança
 
-- O dashboard exige **senha** (`APP_PASSWORD`). Sem ela definida, o login fica desativado — nunca
-  publique sem senha, pois os dados são gastos de anúncios de clientes.
-- O `.env` e o banco `.db` **nunca** vão para o repositório (`.gitignore`).
+- ⚠️ O app **não tem login/senha** — quem tiver a URL acessa os dados (gastos de anúncios e
+  faturamento de clientes). Se isso for um problema, considere restringir o acesso pela rede
+  (IP allowlist do host) ou reintroduzir alguma autenticação antes de divulgar a URL.
+- O `.env` **nunca** vai para o repositório (`.gitignore`).
 
 ---
 
@@ -151,11 +151,13 @@ interno não funciona lá. A entrada é `api/index.ts` (na raiz), que reaproveit
 1. No [Vercel](https://vercel.com): **Add New** → **Project** → importe o repositório do GitHub.
    O `vercel.json` já configura o build do client e a função `api/index.ts`.
 2. Em **Settings → Environment Variables**, adicione (mesmas do `server/.env.example`):
-   - `DATABASE_URL`, `APP_PASSWORD`, `SESSION_SECRET`, `META_SYSTEM_USER_TOKEN` (ou `META_TOKENS`)
-   - `PERFECTPAY_WEBHOOK_TOKEN`, `PERFECTPAY_API_TOKEN` (módulo de Faturamento)
+   - `DATABASE_URL`, `META_SYSTEM_USER_TOKEN` (ou `META_TOKENS`)
+   - `PERFECTPAY_API_TOKEN` (módulo de Faturamento — sincronização via API)
    - `CRON_SECRET` — **defina um valor forte**; protege os endpoints de cron abaixo
    - `NODE_ENV=production`
 3. **Deploy**.
+
+> ⚠️ O app não tem login/senha — a URL da Vercel fica pública para quem a acessar.
 
 ### Agendamento (cron externo — leia com atenção)
 
@@ -170,15 +172,6 @@ acionados por um **serviço de cron externo e gratuito**, como o [cron-job.org](
 | `POST /api/cron/sync-sales?key=SEU_CRON_SECRET` | a cada 1h | Sincroniza vendas da PerfectPay atualizadas nos últimos 3 dias. |
 
 O segredo também pode ir no header `Authorization: Bearer SEU_CRON_SECRET` em vez da query string.
-
-### Webhook da PerfectPay
-
-Como a Vercel expõe uma URL pública HTTPS, o webhook de vendas funciona em tempo real — configure
-na PerfectPay (**Ferramentas → Webhook - Vendas**) apontando para:
-
-```
-https://SEU-APP.vercel.app/api/webhook/perfectpay
-```
 
 ### Backfill inicial de vendas
 

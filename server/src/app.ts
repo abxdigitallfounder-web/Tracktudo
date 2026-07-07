@@ -6,9 +6,7 @@ import { existsSync } from 'node:fs';
 import { config, hasMetaConfig } from './config/index.js';
 import { initSchema } from './db/index.js';
 import { api } from './routes/api.js';
-import { webhook } from './routes/webhook.js';
 import { cron } from './routes/cron.js';
-import { authEnabled, isAuthenticated, requireAuth, handleLogin, handleLogout } from './auth.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -31,23 +29,15 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-app.post('/api/login', handleLogin);
-app.post('/api/logout', handleLogout);
-app.get('/api/auth-status', (req, res) => {
-  res.json({ authEnabled: authEnabled(), authenticated: isAuthenticated(req) });
-});
-
-// ---- Webhook da PerfectPay (PÚBLICO — validado por token no payload) ----
-// Montado ANTES do requireAuth para que a PerfectPay alcance sem login.
-app.use('/api/webhook', webhook);
-
 // ---- Endpoints de cron (PÚBLICOS — validados por CRON_SECRET) ----
 // Acionados por um cron externo (ex.: cron-job.org), já que hosts serverless
 // (Vercel) não mantêm um processo de agendamento contínuo.
 app.use('/api/cron', cron);
 
-// ---- Rotas de dados (protegidas por login, quando habilitado) ----
-app.use('/api', requireAuth, api);
+// ---- Rotas de dados ----
+// Sem login — o app roda sem senha (uso via API/rede confiável). Não exponha
+// a URL publicamente sem reintroduzir alguma proteção de acesso.
+app.use('/api', api);
 
 // ---- Frontend (produção): serve o build do Vite pela mesma origem ----
 // Em hosts serverless como a Vercel, os arquivos estáticos costumam ser

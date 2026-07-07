@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { apiAuthStatus, apiGetStatus, apiLogout, apiRefresh, type Status } from './api';
+import { apiGetStatus, apiRefresh, type Status } from './api';
 import { timeAgo } from './format';
 import { DashboardPage } from './pages/DashboardPage';
 import { LimitsPage } from './pages/LimitsPage';
 import { DailySpendPage } from './pages/DailySpendPage';
 import { FoldersPage } from './pages/FoldersPage';
 import { RevenuePage } from './pages/RevenuePage';
-import { Login } from './pages/Login';
 import { TokenBanner } from './components/TokenBanner';
 import {
   IconGrid,
@@ -17,7 +16,6 @@ import {
   IconRefresh,
   IconSun,
   IconMoon,
-  IconLogout,
 } from './components/icons';
 
 type Tab = 'dashboard' | 'accounts' | 'daily' | 'folders' | 'revenue';
@@ -40,21 +38,6 @@ export default function App() {
   const [status, setStatus] = useState<Status | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  // null = ainda verificando; true/false = precisa (ou não) de login.
-  const [authed, setAuthed] = useState<boolean | null>(null);
-
-  const checkAuth = useCallback(async () => {
-    try {
-      const s = await apiAuthStatus();
-      setAuthed(!s.authEnabled || s.authenticated);
-    } catch {
-      setAuthed(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -65,11 +48,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (authed !== true) return;
     loadStatus();
     const t = setInterval(loadStatus, 15000);
     return () => clearInterval(t);
-  }, [loadStatus, authed]);
+  }, [loadStatus]);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -98,18 +80,6 @@ export default function App() {
 
   const lastUpdate = status?.lastLimitsCollect;
   const collecting = status?.collecting || refreshing;
-
-  async function handleLogout() {
-    await apiLogout();
-    setAuthed(false);
-  }
-
-  if (authed === null) {
-    return <div className="empty" style={{ marginTop: 80 }}>Carregando…</div>;
-  }
-  if (authed === false) {
-    return <Login onSuccess={() => setAuthed(true)} />;
-  }
 
   const pageTitle =
     tab === 'dashboard'
@@ -177,10 +147,6 @@ export default function App() {
           <button className="nav-item" onClick={toggleTheme}>
             {theme === 'light' ? <IconMoon /> : <IconSun />}
             Tema {theme === 'light' ? 'escuro' : 'claro'}
-          </button>
-          <button className="nav-item" onClick={handleLogout}>
-            <IconLogout />
-            Sair
           </button>
         </div>
       </aside>

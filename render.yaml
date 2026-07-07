@@ -16,12 +16,7 @@ services:
         value: production
       - key: META_API_VERSION
         value: v25.0
-      # Segredo do cookie de sessão — o Render gera um valor aleatório seguro.
-      - key: SESSION_SECRET
-        generateValue: true
       # >>> Preencher no painel do Render (Environment) <<<
-      - key: APP_PASSWORD
-        sync: false
       - key: META_SYSTEM_USER_TOKEN
         sync: false
       - key: META_TOKENS
@@ -29,9 +24,9 @@ services:
       # Connection string do Postgres (Neon/Supabase). Use a URL do host -pooler.
       - key: DATABASE_URL
         sync: false
-      # Token de segurança do webhook de vendas da PerfectPay.
-      - key: PERFECTPAY_WEBHOOK_TOKEN
-        sync: false
       # Token Pessoal da API PerfectPay (JWT) — puxa o histórico de vendas.
       - key: PERFECTPAY_API_TOKEN
+        sync: false
+      # Segredo dos endpoints /api/cron/* (usados por um cron externo, ex.: cron-job.org).
+      - key: CRON_SECRET
         sync: false
