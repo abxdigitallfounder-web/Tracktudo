@@ -132,7 +132,14 @@ export const apiGetRevenue = (since: string, until: string) =>
   get<RevenueRow[]>(`/api/sales/revenue?since=${since}&until=${until}`);
 export const apiGetSales = (limit = 50) => get<Sale[]>(`/api/sales?limit=${limit}`);
 
-export async function apiSyncSales(): Promise<{ started: boolean; message?: string }> {
+export interface SalesSyncResponse {
+  started: boolean;
+  message?: string;
+  count?: number;
+  complete?: boolean;
+}
+
+export async function apiSyncSales(): Promise<SalesSyncResponse> {
   const res = await fetch('/api/sales/sync', { method: 'POST' });
   return res.json();
 }
@@ -148,7 +155,13 @@ export const apiGetDailySpend = (since: string, until: string) =>
 export const apiGetAccountDailySpend = (id: string, since: string, until: string) =>
   get<DailySpendRow[]>(`/api/accounts/${id}/daily-spend?since=${since}&until=${until}`);
 
-export async function apiRefresh(): Promise<{ started: boolean; message?: string }> {
+export interface RefreshResponse {
+  started: boolean;
+  message?: string;
+  dailySpend?: { done: boolean; processed: number; remaining: number };
+}
+
+export async function apiRefresh(): Promise<RefreshResponse> {
   const res = await fetch('/api/refresh', { method: 'POST' });
   return res.json();
 }
@@ -253,7 +266,15 @@ export async function apiGetCampaigns(f: CampaignsFilter): Promise<CampaignsResp
   return get<CampaignsResponse>(`/api/campaigns?${params.toString()}`);
 }
 
-export async function apiSyncCampaigns(): Promise<{ started: boolean; message?: string }> {
+export interface CampaignsSyncResponse {
+  started: boolean;
+  message?: string;
+  done?: boolean;
+  processed?: number;
+  remaining?: number;
+}
+
+export async function apiSyncCampaigns(): Promise<CampaignsSyncResponse> {
   const res = await fetch('/api/campaigns/sync', { method: 'POST' });
   return res.json();
 }
