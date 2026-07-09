@@ -363,8 +363,23 @@ export async function getDashboardData(since: string, until: string): Promise<Da
     }
   }
 
-  const currency =
-    [...curCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'BRL';
+  // Moeda dominante: pelas vendas do período; se não houver nenhuma venda
+  // (ex.: "Hoje" antes da 1ª venda do dia), cai pra moeda dominante do GASTO
+  // de anúncios no período — NUNCA um "BRL" fixo, senão zera o adSpend de
+  // contas USD/outras moedas quando simplesmente não há venda ainda.
+  let currency = [...curCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  if (!currency) {
+    const { rows: curByCurrency } = await pool.query<{ currency: string }>(
+      `SELECT a.currency AS currency
+       FROM daily_spend d JOIN accounts a ON a.id = d.account_id
+       WHERE d.date BETWEEN $1 AND $2
+       GROUP BY a.currency
+       ORDER BY SUM(d.spend) DESC
+       LIMIT 1`,
+      [since, until],
+    );
+    currency = curByCurrency[0]?.currency ?? 'BRL';
+  }
 
   // Gasto de anúncios (Meta) no período, SÓ das contas na mesma moeda do
   // faturamento — senão o ROI misturaria moedas (ex.: gasto BRL vs receita USD).

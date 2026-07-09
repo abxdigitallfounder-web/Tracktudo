@@ -27,7 +27,12 @@ import {
   getCampaignStatusLog,
 } from '../db/index.js';
 import { accountStatusLabel } from '../meta/accountStatus.js';
-import { collectAll, isCollecting, today } from '../services/collector.js';
+import {
+  collectLimitsJob,
+  runDailySpendBatch,
+  isCollecting,
+  today,
+} from '../services/collector.js';
 import {
   backfillSales,
   isSyncingSales,
@@ -254,16 +259,20 @@ api.get('/campaigns', asyncHandler(async (req, res) => {
   });
 }));
 
-/** Dispara a sincronização (em lote) de campanhas via API da Meta. */
+/**
+ * Processa UM lote de sincronização de campanhas (~45s) e só responde quando
+ * terminar — em hosts serverless (Vercel), nada sobrevive após a resposta ser
+ * enviada, então "disparar e responder na hora" (fire-and-forget) nunca
+ * completa lá. Retorna { done, processed, remaining } — o frontend chama de
+ * novo automaticamente até done:true.
+ */
 api.post('/campaigns/sync', asyncHandler(async (_req, res) => {
   if (isCollectingCampaigns()) {
     res.status(409).json({ started: false, message: 'Sincronização já em andamento.' });
     return;
   }
-  runCampaignSyncBatch().catch((err) =>
-    console.error('[Campanhas] Erro na sincronização manual:', (err as Error).message),
-  );
-  res.status(202).json({ started: true });
+  const result = await runCampaignSyncBatch();
+  res.json({ started: true, ...result });
 }));
 
 /**
@@ -316,7 +325,12 @@ api.get('/sales/revenue', asyncHandler(async (req, res) => {
   res.json(await getRevenueRange(since, until));
 }));
 
-/** Dispara a sincronização (backfill) do histórico de vendas via API. */
+/**
+ * Sincroniza (backfill) o histórico de vendas via API, com orçamento de tempo
+ * (~45s) — aguarda terminar antes de responder (ver nota em /campaigns/sync
+ * sobre por que não pode ser fire-and-forget em serverless). Se não completar
+ * (histórico grande), volta `complete:false`; o frontend chama de novo.
+ */
 api.post('/sales/sync', asyncHandler(async (_req, res) => {
   if (!salesApiEnabled()) {
     res.status(400).json({ started: false, message: 'PERFECTPAY_API_TOKEN não configurado.' });
@@ -326,11 +340,8 @@ api.post('/sales/sync', asyncHandler(async (_req, res) => {
     res.status(409).json({ started: false, message: 'Sincronização já em andamento.' });
     return;
   }
-  // Roda em background; o frontend acompanha por /api/status.
-  backfillSales().catch((err) =>
-    console.error('[Vendas] Erro no backfill manual:', (err as Error).message),
-  );
-  res.status(202).json({ started: true });
+  const result = await backfillSales(45_000);
+  res.json({ started: true, ...result });
 }));
 
 /** Vendas mais recentes (lista). */
@@ -364,16 +375,24 @@ api.get('/token-health', async (_req, res) => {
   }
 });
 
-/** Dispara uma coleta manual (assíncrona). */
-api.post('/refresh', (_req, res) => {
+/**
+ * Coleta manual: limites (rápido, sempre completa) + UM lote de gastos
+ * diários (~45s). Aguarda terminar antes de responder — em serverless
+ * (Vercel), nada roda depois que a resposta é enviada, então não dá pra
+ * disparar e responder na hora (fire-and-forget nunca completava lá).
+ * Retorna { dailySpend: { done, processed, remaining } } — o frontend chama
+ * de novo automaticamente até done:true (contas grandes levam vários cliques
+ * automáticos até cobrir tudo).
+ */
+api.post('/refresh', asyncHandler(async (_req, res) => {
   if (isCollecting()) {
     res.status(409).json({ started: false, message: 'Coleta já em andamento.' });
     return;
   }
-  // Roda em background; o frontend acompanha por /api/status.
-  collectAll().catch((err) => console.error('[Coleta] Erro na coleta manual:', err));
-  res.status(202).json({ started: true });
-});
+  await collectLimitsJob();
+  const dailySpend = await runDailySpendBatch();
+  res.json({ started: true, dailySpend });
+}));
 
 function parseRange(query: qs): { since: string; until: string } {
   const until = typeof query.until === 'string' ? query.until : today();

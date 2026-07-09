@@ -167,20 +167,12 @@ export function CampaignsPage({ reloadKey }: { reloadKey: number }) {
   async function handleSync() {
     setSyncing(true);
     try {
-      await apiSyncCampaigns();
-      await new Promise<void>((resolve) => {
-        const iv = setInterval(async () => {
-          try {
-            const st = await apiGetStatus();
-            if (!st.campaignsSyncing) {
-              clearInterval(iv);
-              resolve();
-            }
-          } catch {
-            /* ignora */
-          }
-        }, 2000);
-      });
+      // Sincronização em lotes (~45s cada) — chama de novo até completar
+      // (necessário em hosts serverless; ver nota no backend).
+      for (let i = 0; i < 30; i++) {
+        const result = await apiSyncCampaigns();
+        if (result.done !== false) break;
+      }
       await load(false);
     } finally {
       setSyncing(false);

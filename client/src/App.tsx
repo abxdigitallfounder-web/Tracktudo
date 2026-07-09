@@ -58,22 +58,15 @@ export default function App() {
   async function handleRefresh() {
     setRefreshing(true);
     try {
-      await apiRefresh();
-      // Espera a coleta terminar (polling do /api/status).
-      await new Promise<void>((resolve) => {
-        const iv = setInterval(async () => {
-          try {
-            const s = await apiGetStatus();
-            setStatus(s);
-            if (!s.collecting) {
-              clearInterval(iv);
-              resolve();
-            }
-          } catch {
-            /* ignora */
-          }
-        }, 2000);
-      });
+      // /api/refresh processa a coleta de gastos em LOTES (necessário em hosts
+      // serverless — nada roda depois que a resposta é enviada). Chama de novo
+      // automaticamente até o ciclo completar (limite de segurança: 30 voltas).
+      for (let i = 0; i < 30; i++) {
+        const result = await apiRefresh();
+        if (!result.dailySpend || result.dailySpend.done) break;
+      }
+      const s = await apiGetStatus().catch(() => null);
+      if (s) setStatus(s);
       setReloadKey((k) => k + 1);
     } finally {
       setRefreshing(false);
