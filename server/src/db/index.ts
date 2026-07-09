@@ -139,6 +139,16 @@ export async function initSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_campaign_insights_date ON campaign_daily_insights(date);
     ALTER TABLE campaign_daily_insights ADD COLUMN IF NOT EXISTS initiate_checkout INTEGER NOT NULL DEFAULT 0;
 
+    -- Gasto diário por país (breakdown da Meta) — usado no ROI por País do Dashboard.
+    CREATE TABLE IF NOT EXISTS country_daily_spend (
+      account_id TEXT NOT NULL REFERENCES accounts(id),
+      country    TEXT NOT NULL,
+      date       TEXT NOT NULL,
+      spend      DOUBLE PRECISION NOT NULL DEFAULT 0,
+      PRIMARY KEY (account_id, country, date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_country_spend_date ON country_daily_spend(date);
+
     -- Migrações idempotentes para bancos já existentes.
     ALTER TABLE accounts ADD COLUMN IF NOT EXISTS business_id   TEXT;
     ALTER TABLE accounts ADD COLUMN IF NOT EXISTS business_name TEXT;
@@ -303,6 +313,31 @@ export async function saveDailySpend(rows: DailySpend[]): Promise<void> {
         [normalizeId(r.accountId), r.date, r.spend],
       );
     }
+  });
+}
+
+export interface CountrySpendInput {
+  accountId: string;
+  country: string;
+  date: string;
+  spend: number;
+}
+
+/** Grava/atualiza vários registros de gasto por país numa única transação. */
+export async function saveCountryDailySpend(rows: CountrySpendInput[]): Promise<void> {
+  if (rows.length === 0) return;
+  await withTx(async (c) => {
+    await c.query(
+      `INSERT INTO country_daily_spend (account_id, country, date, spend)
+       SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::float8[])
+       ON CONFLICT (account_id, country, date) DO UPDATE SET spend = excluded.spend`,
+      [
+        rows.map((r) => normalizeId(r.accountId)),
+        rows.map((r) => r.country),
+        rows.map((r) => r.date),
+        rows.map((r) => r.spend),
+      ],
+    );
   });
 }
 

@@ -7,11 +7,13 @@ import type {
   AdAccount,
   Campaign,
   CampaignDailyInsight,
+  CountrySpend,
   DailySpend,
   Paged,
   RawAdAccount,
   RawCampaign,
   RawCampaignInsight,
+  RawCountrySpend,
   RawDailyInsight,
 } from './types.js';
 
@@ -343,6 +345,56 @@ export async function getDailySpend(
       if (!row.date_start) continue;
       result.push({
         accountId: actId,
+        date: row.date_start,
+        spend: spendToUnit(row.spend),
+      });
+    }
+
+    after = body.paging?.next ? body.paging.cursors?.after : undefined;
+    if (after) await sleep(config.rateLimit.requestDelayMs);
+  } while (after);
+
+  return result;
+}
+
+/**
+ * Gasto diário de UMA conta, quebrado por país (breakdowns=country) — usado
+ * pra calcular ROI por país no Dashboard (cruzando com o país da venda).
+ */
+export async function getCountryDailySpend(
+  accountId: string,
+  since: string,
+  until: string,
+  token?: string,
+): Promise<CountrySpend[]> {
+  const actId = normalizeActId(accountId);
+  const useToken = token ?? getTokenForAccount(actId);
+  const result: CountrySpend[] = [];
+  let after: string | undefined;
+
+  do {
+    const params: Record<string, string> = {
+      fields: 'spend',
+      level: 'account',
+      breakdowns: 'country',
+      time_increment: '1',
+      time_range: JSON.stringify({ since, until }),
+      limit: '100',
+    };
+    if (after) params.after = after;
+
+    const { body } = await graphGet<Paged<RawCountrySpend>>(
+      `${actId}/insights`,
+      params,
+      `gasto por país ${actId}`,
+      useToken,
+    );
+
+    for (const row of body.data) {
+      if (!row.date_start || !row.country) continue;
+      result.push({
+        accountId: actId,
+        country: row.country,
         date: row.date_start,
         spend: spendToUnit(row.spend),
       });

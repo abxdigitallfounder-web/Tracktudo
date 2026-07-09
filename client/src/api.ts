@@ -119,6 +119,7 @@ export interface DashboardData {
   bySource: Array<{ source: string; count: number; value: number }>;
   byProduct: Array<{ product: string; count: number; value: number }>;
   byCountry: Array<{ country: string; count: number; value: number }>;
+  roiByCountry: Array<{ country: string; revenue: number; spend: number; roi: number | null }>;
   byHour: Array<{ hour: number; count: number }>;
   profitByHour: Array<{ hour: number; profit: number }>;
   approval: Array<{ method: string; rate: number | null }>;

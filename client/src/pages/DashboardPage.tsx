@@ -370,6 +370,34 @@ export function DashboardPage({ reloadKey }: { reloadKey: number }) {
           )}
         </div>
 
+        {/* ROI por País */}
+        <div className="dash-panel" style={{ gridArea: 'roipais' }}>
+          <div className="dp-head">
+            <span className="dp-title">ROI por País</span>
+            <Info text="Receita (vendas aprovadas, por país do cliente) vs. gasto de anúncios (Meta, por país do público), no mesmo período e moeda. ROI = (receita − gasto) ÷ gasto." />
+          </div>
+          {data.roiByCountry.length === 0 ? (
+            <div className="dash-empty">Sem dados de receita/gasto por país no período.</div>
+          ) : (
+            <div className="dp-list">
+              {data.roiByCountry.map((c) => (
+                <div className="dp-list-row" key={c.country}>
+                  <span className="nm">
+                    {flag(c.country)} {countryName(c.country)}
+                  </span>
+                  <span className="muted" style={{ display: 'flex', gap: 10 }}>
+                    <span>receita {money(c.revenue)}</span>
+                    <span>gasto {money(c.spend)}</span>
+                    <strong className={c.roi != null ? (c.roi >= 0 ? 'pos-text' : 'neg-text') : ''}>
+                      {c.roi != null ? `${c.roi.toFixed(0)}%` : 'N/A'}
+                    </strong>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Vendas por Horário */}
         <div className="dash-panel" style={{ gridArea: 'hora' }}>
           <div className="dp-head">

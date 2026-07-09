@@ -752,6 +752,7 @@ th.num {
     "pgto   pend    margem  taxas"
     "pgto   fonte   fonte   aprov"
     "prod   pais    hora    hora"
+    "roipais roipais roipais roipais"
     "lucrohora lucrohora lucrohora lucrohora";
 }
 @media (max-width: 1100px) {
@@ -766,6 +767,7 @@ th.num {
       "fonte  fonte"
       "prod   pais"
       "hora   hora"
+      "roipais roipais"
       "lucrohora lucrohora";
   }
 }
