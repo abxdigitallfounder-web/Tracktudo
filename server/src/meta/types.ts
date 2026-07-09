@@ -62,6 +62,21 @@ export interface DailySpend {
   spend: number;
 }
 
+/** Uma linha de insights diários com breakdown por país (level=account). */
+export interface RawCountrySpend {
+  spend?: string;
+  date_start?: string;
+  country?: string;
+}
+
+/** Gasto de um dia, de uma conta, num país (para ROI por país no Dashboard). */
+export interface CountrySpend {
+  accountId: string;
+  country: string;
+  date: string; // YYYY-MM-DD
+  spend: number;
+}
+
 /** Campanha crua como vem em /{act_id}/campaigns. */
 export interface RawCampaign {
   id: string;

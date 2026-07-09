@@ -259,6 +259,7 @@ export interface DashboardData {
   bySource: Array<{ source: string; count: number; value: number }>;
   byProduct: Array<{ product: string; count: number; value: number }>;
   byCountry: Array<{ country: string; count: number; value: number }>;
+  roiByCountry: Array<{ country: string; revenue: number; spend: number; roi: number | null }>;
   byHour: Array<{ hour: number; count: number }>;
   profitByHour: Array<{ hour: number; profit: number }>;
   approval: Array<{ method: string; rate: number | null }>;
@@ -391,6 +392,27 @@ export async function getDashboardData(since: string, until: string): Promise<Da
   );
   const adSpend = Number(spendRows[0]?.total ?? 0);
 
+  // Gasto por país (Meta), mesma restrição de moeda do adSpend acima —
+  // cruzado com a receita por país (já calculada em `country`) pro ROI por país.
+  const { rows: countrySpendRows } = await pool.query<{ country: string; total: number }>(
+    `SELECT cs.country AS country, COALESCE(SUM(cs.spend), 0) AS total
+     FROM country_daily_spend cs JOIN accounts a ON a.id = cs.account_id
+     WHERE cs.date BETWEEN $1 AND $2 AND a.currency = $3
+     GROUP BY cs.country`,
+    [since, until, currency],
+  );
+  const countrySpend = new Map<string, number>();
+  for (const r of countrySpendRows) countrySpend.set(r.country, Number(r.total));
+
+  const roiCountries = new Set([...country.keys(), ...countrySpend.keys()]);
+  const roiByCountry = [...roiCountries]
+    .map((c) => {
+      const rev = country.get(c)?.value ?? 0;
+      const spend = countrySpend.get(c) ?? 0;
+      return { country: c, revenue: rev, spend, roi: spend > 0 ? ((rev - spend) / spend) * 100 : null };
+    })
+    .sort((a, b) => b.spend - a.spend);
+
   const taxes = 0;
   const netRevenue = grossRevenue - refunds;
   const profit = netRevenue - adSpend - taxes;
@@ -436,6 +458,7 @@ export async function getDashboardData(since: string, until: string): Promise<Da
     byCountry: [...country.entries()]
       .map(([c, v]) => ({ country: c, count: v.count, value: v.value }))
       .sort((a, b) => b.value - a.value),
+    roiByCountry,
     byHour: hour.map((count, h) => ({ hour: h, count })),
     // Lucro por hora = faturamento da hora − parcela do gasto de anúncios
     // (distribuído igualmente pelas 24h, já que o gasto da Meta é diário).

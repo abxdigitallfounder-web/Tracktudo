@@ -1,6 +1,12 @@
 import { config } from '../config/index.js';
-import { listAdAccounts, getDailySpend } from '../meta/client.js';
-import { saveAccountSnapshots, saveDailySpend, setState, getState } from '../db/index.js';
+import { listAdAccounts, getDailySpend, getCountryDailySpend } from '../meta/client.js';
+import {
+  saveAccountSnapshots,
+  saveDailySpend,
+  saveCountryDailySpend,
+  setState,
+  getState,
+} from '../db/index.js';
 import type { AdAccount } from '../meta/types.js';
 
 const sleep = (ms: number): Promise<void> =>
@@ -200,6 +206,9 @@ export async function runDailySpendBatch(): Promise<DailyBatchResult> {
       try {
         const rows = await getDailySpend(id, cursor.since, cursor.until);
         await saveDailySpend(rows);
+        // Mesmo período, quebrado por país — usado no ROI por País do Dashboard.
+        const countryRows = await getCountryDailySpend(id, cursor.since, cursor.until);
+        await saveCountryDailySpend(countryRows);
       } catch (err) {
         console.error(`[Coleta] Gastos falhou em ${id}: ${(err as Error).message}`);
       }
