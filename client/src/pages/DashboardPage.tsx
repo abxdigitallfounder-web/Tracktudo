@@ -12,7 +12,7 @@ import {
   ReferenceLine,
   ResponsiveContainer,
 } from 'recharts';
-import { apiGetDashboard, type DashboardData } from '../api';
+import { apiGetDashboard, apiGetRoiByAd, type DashboardData, type AdRoiRow } from '../api';
 import { formatMoney } from '../format';
 
 // Paleta por índice (os rótulos de pagamento são dinâmicos, vindos dos dados).
@@ -117,6 +117,28 @@ export function DashboardPage({ reloadKey }: { reloadKey: number }) {
     const t = setInterval(() => load(false), 20000);
     return () => clearInterval(t);
   }, [load]);
+
+  // ROI por Anúncio: carrega à parte (busca ao vivo na Meta, pode demorar
+  // ~dezenas de segundos) — não trava nem repete no auto-refresh do resto.
+  const [adRoi, setAdRoi] = useState<AdRoiRow[]>([]);
+  const [adRoiLoading, setAdRoiLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    setAdRoiLoading(true);
+    apiGetRoiByAd(since, until)
+      .then((resp) => {
+        if (alive) setAdRoi(resp.rows);
+      })
+      .catch(() => {
+        if (alive) setAdRoi([]);
+      })
+      .finally(() => {
+        if (alive) setAdRoiLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [since, until, reloadKey]);
 
   function setPreset(daysBack: number) {
     const u = new Date();
@@ -394,6 +416,55 @@ export function DashboardPage({ reloadKey }: { reloadKey: number }) {
                   </span>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* ROI por Anúncio (nível de anúncio/conjunto) */}
+        <div className="dash-panel" style={{ gridArea: 'roianuncio' }}>
+          <div className="dp-head">
+            <span className="dp-title">ROI por Anúncio</span>
+            <Info text="Só os anúncios com venda no período (utm_content = ad_id da Meta), buscados ao vivo — pode demorar um pouco mais que o resto do painel." />
+          </div>
+          {adRoiLoading ? (
+            <div className="dash-empty">Buscando gasto por anúncio na Meta…</div>
+          ) : adRoi.length === 0 ? (
+            <div className="dash-empty">Nenhum anúncio com venda trackeada no período.</div>
+          ) : (
+            <div className="table-wrap" style={{ boxShadow: 'none', border: '1px solid var(--border)' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th className="no-sort">Anúncio</th>
+                    <th className="no-sort">Conjunto</th>
+                    <th className="num no-sort">Gasto</th>
+                    <th className="num no-sort">Cliques</th>
+                    <th className="num no-sort">Vendas</th>
+                    <th className="num no-sort">Receita</th>
+                    <th className="num no-sort">ROI</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {adRoi.map((a) => (
+                    <tr key={a.adId}>
+                      <td>
+                        <strong>{a.adName}</strong>
+                        {a.campaignName && (
+                          <div className="muted" style={{ fontSize: 11 }}>{a.campaignName}</div>
+                        )}
+                      </td>
+                      <td>{a.adsetName ?? <span className="muted">—</span>}</td>
+                      <td className="num">{formatMoney(a.spend, a.currency)}</td>
+                      <td className="num">{a.clicks}</td>
+                      <td className="num">{a.sales}</td>
+                      <td className="num">{formatMoney(a.revenue, a.currency)}</td>
+                      <td className={`num ${a.roi != null ? (a.roi >= 0 ? 'pos-text' : 'neg-text') : ''}`}>
+                        {a.roi != null ? `${a.roi.toFixed(1)}%` : <span className="muted">N/A</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

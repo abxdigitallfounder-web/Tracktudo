@@ -128,6 +128,22 @@ export interface DashboardData {
 export const apiGetDashboard = (since: string, until: string) =>
   get<DashboardData>(`/api/dashboard?since=${since}&until=${until}`);
 
+export interface AdRoiRow {
+  adId: string;
+  adName: string;
+  adsetName: string | null;
+  campaignName: string | null;
+  currency: string;
+  spend: number;
+  clicks: number;
+  sales: number;
+  revenue: number;
+  roi: number | null;
+}
+
+export const apiGetRoiByAd = (since: string, until: string) =>
+  get<{ rows: AdRoiRow[] }>(`/api/dashboard/roi-by-ad?since=${since}&until=${until}`);
+
 export const apiGetSalesSummary = () => get<SalesSummary>('/api/sales/summary');
 export const apiGetRevenue = (since: string, until: string) =>
   get<RevenueRow[]>(`/api/sales/revenue?since=${since}&until=${until}`);

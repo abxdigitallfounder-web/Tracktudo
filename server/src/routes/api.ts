@@ -11,6 +11,7 @@ import {
   getDashboardData,
   getCampaignsTable,
   getUntrackedSalesCount,
+  getSalesByAd,
 } from '../db/queries.js';
 import { saleStatusLabel, paymentTypeLabel } from '../perfectpay/status.js';
 import {
@@ -39,7 +40,7 @@ import {
   salesApiEnabled,
 } from '../services/salesCollector.js';
 import { runCampaignSyncBatch, isCollectingCampaigns } from '../services/campaignCollector.js';
-import { setCampaignStatus } from '../meta/client.js';
+import { setCampaignStatus, getAdPerformance } from '../meta/client.js';
 import { getTokensInfo } from '../meta/tokenInfo.js';
 import { config } from '../config/index.js';
 
@@ -209,6 +210,53 @@ api.put('/accounts/:id/folder', asyncHandler(async (req, res) => {
 api.get('/dashboard', asyncHandler(async (req, res) => {
   const { since, until } = parseRange(req.query);
   res.json(await getDashboardData(since, until));
+}));
+
+/**
+ * ROI por anúncio (nível de anúncio/conjunto, não só campanha) — cruza vendas
+ * (utm_content = ad_id da Meta) com gasto/cliques reais, buscados ao vivo na
+ * Meta. Endpoint separado do /dashboard: só chama a Meta para os anúncios que
+ * de fato tiveram venda no período (não o inventário todo), mas ainda assim
+ * é mais lento — o frontend carrega esse widget à parte, sem travar o resto.
+ */
+api.get('/dashboard/roi-by-ad', asyncHandler(async (req, res) => {
+  const { since, until } = parseRange(req.query);
+  const salesByAd = await getSalesByAd(since, until, 30);
+  if (salesByAd.length === 0) {
+    res.json({ rows: [] });
+    return;
+  }
+  const accounts = await getAccountsWithLatestSnapshot();
+  const currencyByAccount = new Map(accounts.map((a) => [a.id, a.currency]));
+
+  const rows = [];
+  const startedAt = Date.now();
+  for (const s of salesByAd) {
+    if (Date.now() - startedAt > 45_000) break; // orçamento de tempo (Vercel-safe)
+    try {
+      const perf = await getAdPerformance(s.adId, since, until);
+      if (!perf) continue;
+      const currency = (perf.accountId && currencyByAccount.get(perf.accountId)) || 'BRL';
+      const roi = perf.spend > 0 ? ((s.revenue - perf.spend) / perf.spend) * 100 : null;
+      rows.push({
+        adId: perf.id,
+        adName: perf.name,
+        adsetName: perf.adsetName,
+        campaignName: perf.campaignName,
+        currency,
+        spend: perf.spend,
+        clicks: perf.clicks,
+        sales: s.count,
+        revenue: s.revenue,
+        roi,
+      });
+    } catch (err) {
+      console.error(`[Dashboard] Falha ao buscar anúncio ${s.adId}:`, (err as Error).message);
+    }
+    await new Promise((r) => setTimeout(r, config.rateLimit.requestDelayMs));
+  }
+  rows.sort((a, b) => b.spend - a.spend);
+  res.json({ rows });
 }));
 
 // ---------- Campanhas (Meta + PerfectPay cruzadas) ----------

@@ -572,6 +572,54 @@ export async function getCampaignsTable(filter: CampaignsFilter): Promise<Campai
   return rows;
 }
 
+export interface AdSalesRow {
+  adId: string;
+  revenue: number;
+  count: number;
+  productName: string | null;
+}
+
+/**
+ * Vendas aprovadas do período, agregadas por anúncio (utm_content do raw da
+ * PerfectPay = ad_id da Meta). Retorna só os top `limit` por receita — usado
+ * pra decidir quais anúncios buscar performance na Meta (evita chamar a API
+ * pra todo o histórico; só os que realmente venderam no período).
+ */
+export async function getSalesByAd(
+  since: string,
+  until: string,
+  limit = 30,
+): Promise<AdSalesRow[]> {
+  const { rows } = await pool.query<{ sale_amount: number; raw: string | null; product_name: string | null }>(
+    `SELECT sale_amount, raw, product_name
+     FROM sales
+     WHERE status = ANY($1)
+       AND LEFT(COALESCE(date_approved, date_created), 10) BETWEEN $2 AND $3`,
+    [APPROVED_STATUSES, since, until],
+  );
+
+  const byAd = new Map<string, { revenue: number; count: number; productName: string | null }>();
+  for (const r of rows) {
+    if (!r.raw) continue;
+    try {
+      const parsed = JSON.parse(r.raw) as { metadata?: { utm_content?: string } };
+      const adId = parsed.metadata?.utm_content?.trim();
+      if (!adId) continue;
+      const entry = byAd.get(adId) ?? { revenue: 0, count: 0, productName: r.product_name };
+      entry.revenue += Number(r.sale_amount) || 0;
+      entry.count += 1;
+      byAd.set(adId, entry);
+    } catch {
+      /* ignora raw inválido */
+    }
+  }
+
+  return [...byAd.entries()]
+    .map(([adId, v]) => ({ adId, revenue: v.revenue, count: v.count, productName: v.productName }))
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, limit);
+}
+
 /** Vendas do período cujo utm_campaign não bate com nenhuma campanha conhecida. */
 export async function getUntrackedSalesCount(since: string, until: string): Promise<number> {
   const { rows } = await pool.query<{ n: string }>(

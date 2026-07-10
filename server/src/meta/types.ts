@@ -69,6 +69,29 @@ export interface RawCountrySpend {
   country?: string;
 }
 
+/** Resposta crua de /{ad_id}?fields=name,adset{name},campaign{name},account_id,insights{...}. */
+export interface RawAdPerformance {
+  id: string;
+  name?: string;
+  account_id?: string;
+  adset?: { id?: string; name?: string };
+  campaign?: { id?: string; name?: string };
+  insights?: { data?: Array<{ spend?: string; clicks?: string }> };
+}
+
+/** Performance de UM anúncio (gasto/cliques) no período pedido, já normalizada. */
+export interface AdPerformance {
+  id: string;
+  name: string;
+  accountId: string | null;
+  adsetId: string | null;
+  adsetName: string | null;
+  campaignId: string | null;
+  campaignName: string | null;
+  spend: number;
+  clicks: number;
+}
+
 /** Gasto de um dia, de uma conta, num país (para ROI por país no Dashboard). */
 export interface CountrySpend {
   accountId: string;

@@ -5,12 +5,14 @@ import {
 } from './accountStatus.js';
 import type {
   AdAccount,
+  AdPerformance,
   Campaign,
   CampaignDailyInsight,
   CountrySpend,
   DailySpend,
   Paged,
   RawAdAccount,
+  RawAdPerformance,
   RawCampaign,
   RawCampaignInsight,
   RawCountrySpend,
@@ -542,4 +544,41 @@ export async function setCampaignStatus(
     `alterar status de ${campaignId} para ${status}`,
     useToken,
   );
+}
+
+/**
+ * Busca nome + conjunto + campanha + gasto/cliques de UM anúncio, no período
+ * pedido, numa única chamada (campo `insights` aninhado). Usado pro ROI por
+ * Anúncio no Dashboard — só é chamado para anúncios que já têm venda
+ * (utm_content), não para todo o inventário (evitaria milhares de chamadas).
+ */
+export async function getAdPerformance(
+  adId: string,
+  since: string,
+  until: string,
+  token?: string,
+): Promise<AdPerformance | null> {
+  const useToken = token ?? config.meta.accessToken;
+  const timeRange = JSON.stringify({ since, until });
+  const { body } = await graphGet<RawAdPerformance>(
+    adId,
+    {
+      fields: `name,account_id,adset{id,name},campaign{id,name},insights.time_range(${timeRange}){spend,clicks}`,
+    },
+    `performance do anúncio ${adId}`,
+    useToken,
+  );
+  if (!body?.id) return null;
+  const insight = body.insights?.data?.[0];
+  return {
+    id: body.id,
+    name: body.name ?? adId,
+    accountId: body.account_id ? normalizeActId(body.account_id) : null,
+    adsetId: body.adset?.id ?? null,
+    adsetName: body.adset?.name ?? null,
+    campaignId: body.campaign?.id ?? null,
+    campaignName: body.campaign?.name ?? null,
+    spend: spendToUnit(insight?.spend),
+    clicks: Number(insight?.clicks) || 0,
+  };
 }
